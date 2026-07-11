@@ -1,4 +1,19 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
-  "idf.extensionActivationMode": "always"
+  "idf.extensionActivationMode": "always",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32"
+  },
+  "idf.openOcdConfigs": [
+    "board/esp32-wrover-kit-3.3v.cfg"
+  ],
+  "idf.currentSetup": "C:\\Espressif\\.espressif\\v5.5.4\\esp-idf",
+  "idf.flashType": "UART",
+  "clangd.path": "C:\\Espressif\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\Users\\user\\okarobo_dev\\CatchRobo_2026\\ESP32\\controller\\build"
+  ],
+  "idf.portWin": "COM8"
 }
