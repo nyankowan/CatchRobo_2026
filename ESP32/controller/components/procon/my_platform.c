@@ -7,36 +7,11 @@
 
 #define PRO_CONTROLLER_COD 0b0010010100001000//cod=0x00002508
 
-const mypad_t EMPTY_MYPAD = {
-    .A = false,
-    .B = false,
-    .X = false,
-    .Y = false,
-    .UP = false,
-    .DOWN = false,
-    .LEFT = false,
-    .RIGHT = false,
-    .L = false,
-    .R = false,
-    .ZL = false,
-    .ZR = false,
-    .TL = false,
-    .TR = false,
-    .MINUS = false,
-    .PLUS = false,
-    .HOME = false,
-    .CAPTURE = false,
-    .LX = 0,
-    .LY = 0,
-    .RX = 0,
-    .RY = 0,
-    .battery_level = 0,
-    .connected = false
-};
+
 
 // 接続されたコントローラーを保持する配列  
-static uni_hid_device_t* controllers[CONFIG_BLUEPAD32_MAX_DEVICES] = {0};
-mypad_t mypad[CONFIG_BLUEPAD32_MAX_DEVICES] = {0};
+static uni_hid_device_t* controllers[MAX_MYPAD] = {0};
+
 
 // Custom "instance"
 typedef struct my_platform_instance_s {
@@ -56,7 +31,6 @@ static void my_platform_init(int argc, const char** argv) {
 
     logi("custom: init()\n");
     uni_gamepad_set_mappings_type(UNI_GAMEPAD_MAPPINGS_TYPE_SWITCH);
-
 }
 
 static void my_platform_on_init_complete(void) {
@@ -97,7 +71,7 @@ static void my_platform_on_device_connected(uni_hid_device_t* d) {
 }
 
 static void my_platform_on_device_disconnected(uni_hid_device_t* d) {
-    for (int i = 0; i < CONFIG_BLUEPAD32_MAX_DEVICES; i++) {  
+    for (int i = 0; i < MAX_MYPAD; i++) {  
         if (controllers[i] == d) {  
             controllers[i] = NULL;  
             logi("Controller %d disconnected\n", i);
@@ -111,7 +85,7 @@ static void my_platform_on_device_disconnected(uni_hid_device_t* d) {
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
     logi("custom: device ready: %p\n", d);
     // 空きスロットに割り当てる  
-    for (int i = 0; i < CONFIG_BLUEPAD32_MAX_DEVICES; i++) {  
+    for (int i = 0; i < MAX_MYPAD; i++) {  
         if (controllers[i] == NULL) {  
             controllers[i] = d;  
             logi("Controller %d connected\n", i);
@@ -132,7 +106,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
 static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t* ctl) {
     // どのコントローラーか特定する  
     int player = -1;  
-    for (int i = 0; i < CONFIG_BLUEPAD32_MAX_DEVICES; i++) {  
+    for (int i = 0; i < MAX_MYPAD; i++) {  
         if (controllers[i] == d) { player = i; break; }  
     }  
     if (player < 0) return;  
@@ -143,10 +117,9 @@ static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t
         uni_gamepad_remap(gp);
         convert_gp(gp, &mypad[player]);
         mypad[player].battery_level = ctl->battery;
-
-        printf("player %d: ",player);
-        controller_dump(&mypad[player]);
-        printf("\n");
+        // printf("player %d: ",player);
+        // controller_dump(&mypad[player]);
+        // printf("\n");
     }  
 }
 
@@ -194,8 +167,6 @@ struct uni_platform* get_my_platform(void) {
     return &plat;
 }
 
-
-
 void convert_gp(uni_gamepad_t *gp, mypad_t *mp){
     mp->A = (gp->buttons & BUTTON_A) ? 1 : 0;
     mp->B = (gp->buttons & BUTTON_B) ? 1 : 0;
@@ -221,8 +192,4 @@ void convert_gp(uni_gamepad_t *gp, mypad_t *mp){
     mp->RY = gp->axis_ry;
 
     mp->connected = true;
-}
-
-void controller_dump(mypad_t* pad) {
-    logi("A: %d, B: %d, X: %d, Y: %d, UP: %d, DOWN: %d, LEFT: %d, RIGHT: %d, L: %d, R: %d, ZL: %d, ZR: %d, TL: %d, TR: %d, MINUS: %d, PLUS: %d, HOME: %d, CAPTURE: %d, LX: %2d, LY: %2d, RX: %2d, RY: %2d", pad->A, pad->B, pad->X, pad->Y, pad->UP, pad->DOWN, pad->LEFT, pad->RIGHT, pad->L, pad->R, pad->ZL, pad->ZR, pad->TL, pad->TR, pad->MINUS, pad->PLUS, pad->HOME, pad->CAPTURE, pad->LX, pad->LY, pad->RX, pad->RY);
 }

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MAX_MYPAD CONFIG_BLUEPAD32_MAX_DEVICES
+
 // mypad構造体の定義
 typedef struct {
     bool A;      // Aボタン: 1=押されている, 0=押されていない
@@ -32,6 +34,8 @@ typedef struct {
     bool connected; // コントローラーが接続されているかどうか
 } mypad_t;
 
-extern mypad_t mypad[CONFIG_BLUEPAD32_MAX_DEVICES];
+extern const mypad_t EMPTY_MYPAD;
+
+extern mypad_t mypad[];
 void controller_dump(mypad_t* pad);
 #endif//PROCON_DATA_H
