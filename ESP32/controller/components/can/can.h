@@ -1,7 +1,7 @@
 #ifndef CAN_H
 #define CAN_H
 
-#include "can_protcol.h"
+#include "can_protocol.h"
 #include "esp_err.h"
 #include "soc/gpio_num.h"
 

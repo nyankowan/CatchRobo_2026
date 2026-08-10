@@ -1,5 +1,4 @@
 #include "can.h"
-#include "can_protcol.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "driver/twai.h"
@@ -9,16 +8,16 @@
 static bool ALREADY_CAN_INIT_AND_START = false;
 #define CAN_TAG "CAN"
 
-esp_err_t can_tx(can_command_data_t *com){
-    if(com == NULL){
+esp_err_t can_tx(can_command_data_t *com_data){
+    if(com_data == NULL){
         ESP_LOGE(CAN_TAG, "Argument is invalid");
         return ESP_ERR_INVALID_ARG;
     }
     twai_message_t msg = {
         .data_length_code = 8,
-        .identifier = com->id,
+        .identifier = com_data->id,
     };
-    memcpy(msg.data, com->data, sizeof(msg.data));
+    memcpy(msg.data, &com_data->data, sizeof(msg.data));
     switch(twai_transmit(&msg, 0)){
         case ESP_OK:
             return ESP_OK;

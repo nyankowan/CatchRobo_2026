@@ -19,8 +19,6 @@ typedef struct my_platform_instance_s {
 } my_platform_instance_t;
 
 // Declarations
-static void trigger_event_on_gamepad(uni_hid_device_t* d);
-static my_platform_instance_t* get_my_platform_instance(uni_hid_device_t* d);
 void convert_gp(uni_gamepad_t *gp, mypad_t *mp);
 //
 // Platform Overrides
@@ -129,22 +127,6 @@ static const uni_property_t* my_platform_get_property(uni_property_idx_t idx) {
 }
 
 static void my_platform_on_oob_event(uni_platform_oob_event_t event, void* data) {
-}
-
-//
-// Helpers
-//
-static my_platform_instance_t* get_my_platform_instance(uni_hid_device_t* d) {
-    return (my_platform_instance_t*)&d->platform_data[0];
-}
-
-static void trigger_event_on_gamepad(uni_hid_device_t* d) {
-    my_platform_instance_t* ins = get_my_platform_instance(d);
-
-    if (d->report_parser.play_dual_rumble != NULL) {
-        d->report_parser.play_dual_rumble(d, 0 /* delayed start ms */, 150 /* duration ms */, 128 /* weak magnitude */,
-                                          40 /* strong magnitude */);
-    }
 }
 
 //
