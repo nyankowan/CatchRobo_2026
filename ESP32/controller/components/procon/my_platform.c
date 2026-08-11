@@ -4,13 +4,14 @@
 #include <string.h>
 #include "procon_data.h"
 #include <uni.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define PRO_CONTROLLER_COD 0b0010010100001000//cod=0x00002508
 
-
-
 // 接続されたコントローラーを保持する配列  
 static uni_hid_device_t* controllers[MAX_MYPAD] = {0};
+static mypad_t mypad[MAX_MYPAD] = {0};
 
 
 // Custom "instance"
@@ -174,4 +175,10 @@ void convert_gp(uni_gamepad_t *gp, mypad_t *mp){
     mp->RY = gp->axis_ry;
 
     mp->connected = true;
+}
+
+void get_mypad(mypad_t** mp){
+    for(int i = 0; i<MAX_MYPAD; i++){
+        mp[i] = &mypad[i];
+    }
 }

@@ -11,6 +11,8 @@
 #include <hci_dump.h>
 #include <hci_dump_embedded_stdout.h>
 #include <uni.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "sdkconfig.h"
 
@@ -26,6 +28,8 @@
 
 // Defined in my_platform.c
 struct uni_platform* get_my_platform(void);
+
+void main_task(void* arg);
 
 int app_main(void) {
     // hci_dump_open(NULL, HCI_DUMP_STDOUT);
@@ -49,8 +53,41 @@ int app_main(void) {
     uni_init(0 /* argc */, NULL /* argv */);
 
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
+    xTaskCreatePinnedToCore(main_task, "main_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
     // Does not return.
     btstack_run_loop_execute();
 
     return 0;
+}
+
+#define MAIN_TASK_LOOP_MS 10
+#define MYPAD_CONNCTION_WAIT_MS 2000
+mypad_t *mypad[MAX_MYPAD] = {0};
+
+void dump(){
+    logi("mypad[0]: ");
+    mypad_dump(mypad[0]);
+    logi("\n");
+    logi("mypad[1]: ");
+    mypad_dump(mypad[1]);
+    logi("\n");
+}
+
+void main_task(void* arg){
+    while(1){
+        get_mypad(mypad);
+        while(mypad[0]==NULL || mypad[1]==NULL){
+            logi("Can't get mypad.\n");
+            get_mypad(mypad);
+            vTaskDelay(pdMS_TO_TICKS(MYPAD_CONNCTION_WAIT_MS));
+        }
+        if(mypad[0]->A){
+            printf("player 1 press A\n");
+        }
+        if(mypad[1]->A){
+            printf("player 2 press A\n");
+        }
+        vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_LOOP_MS));
+        dump();
+    }
 }

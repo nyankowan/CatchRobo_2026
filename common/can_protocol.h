@@ -15,11 +15,11 @@ typedef union{
             union{//3
                 uint8_t hand;
                 struct{
-                    uint8_t left    : 1;
-                    uint8_t middle  : 1;
-                    uint8_t right   : 1;
-                    uint8_t expand  : 1;
-                    uint8_t         : 4;
+                    unsigned int left    : 1;
+                    unsigned int middle  : 1;
+                    unsigned int right   : 1;
+                    unsigned int expand  : 1;
+                    unsigned int         : 4;
                 };
             };
         } lower;

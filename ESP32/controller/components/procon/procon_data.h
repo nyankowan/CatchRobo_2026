@@ -36,6 +36,6 @@ typedef struct {
 
 extern const mypad_t EMPTY_MYPAD;
 
-extern mypad_t mypad[];
-void controller_dump(mypad_t* pad);
+void get_mypad(mypad_t** mp);
+void mypad_dump(mypad_t* pad);
 #endif//PROCON_DATA_H
