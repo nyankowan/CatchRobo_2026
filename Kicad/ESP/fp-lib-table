@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "ESP32_DevKitC_32E") (type "KiCad") (uri "//wsl.localhost/Ubuntu-24.04/home/nyanko/CatchRobo_2026/Kicad/library/ESP32_DevKitC_32E.pretty") (options "") (descr ""))
+)
