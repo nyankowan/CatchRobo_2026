@@ -20,6 +20,8 @@
 
 #include "can.h"
 #include "procon_data.h"
+#include "coordinate.h"
+#include "arm.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -30,6 +32,7 @@
 struct uni_platform* get_my_platform(void);
 
 void main_task(void* arg);
+void dump_task(void* arg);
 
 int app_main(void) {
     // hci_dump_open(NULL, HCI_DUMP_STDOUT);
@@ -54,40 +57,51 @@ int app_main(void) {
 
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
     xTaskCreatePinnedToCore(main_task, "main_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(dump_task, "dump_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
     // Does not return.
     btstack_run_loop_execute();
 
     return 0;
 }
 
-#define MAIN_TASK_LOOP_MS 10
-#define MYPAD_CONNCTION_WAIT_MS 2000
-mypad_t *mypad[MAX_MYPAD] = {0};
+#define MAIN_TASK_LOOP_MS 17
+#define DUMP_TASK_LOOP_MS 2000
+#define GET_MYPAD_WAIT_MS 2000
 
-void dump(){
-    logi("mypad[0]: ");
-    mypad_dump(mypad[0]);
-    logi("\n");
-    logi("mypad[1]: ");
-    mypad_dump(mypad[1]);
-    logi("\n");
+void dump_task(void* arg){
+    mypad_t *mp[MAX_MYPAD] = {0};
+    direct_t *arm[ARM_NUM] = {0};
+    while(1){
+        get_mypad(mp);
+        get_arms_cartesian_coordinate(arm);
+        logi("mypad[0]: ");
+        mypad_dump(mp[0]);
+        logi("\n");
+        logi("mypad[1]: ");
+        mypad_dump(mp[1]);
+        logi("\n");
+        logi("arm[0]");coordinate_dump(arm[0]);
+        logi("arm[1]");coordinate_dump(arm[1]);
+        vTaskDelay(pdMS_TO_TICKS(DUMP_TASK_LOOP_MS));
+    }
 }
 
 void main_task(void* arg){
+    mypad_t *mypad[MAX_MYPAD] = {0};
+    direct_t *arm_coordinate[ARM_NUM] = {0};
     while(1){
         get_mypad(mypad);
-        while(mypad[0]==NULL || mypad[1]==NULL){
-            logi("Can't get mypad.\n");
-            get_mypad(mypad);
-            vTaskDelay(pdMS_TO_TICKS(MYPAD_CONNCTION_WAIT_MS));
-        }
-        if(mypad[0]->A){
-            printf("player 1 press A\n");
-        }
-        if(mypad[1]->A){
-            printf("player 2 press A\n");
-        }
+        get_arms_cartesian_coordinate(arm_coordinate);
+        if(mypad[0]->LEFT)arm_coordinate[0]->x -= 0.1;
+        if(mypad[0]->RIGHT)arm_coordinate[0]->x += 0.1;
+        if(mypad[0]->UP)arm_coordinate[0]->y += 0.1;
+        if(mypad[0]->DOWN)arm_coordinate[0]->y -= 0.1;
+
+        if(mypad[1]->LEFT)arm_coordinate[1]->x -= 0.1;
+        if(mypad[1]->RIGHT)arm_coordinate[1]->x += 0.1;
+        if(mypad[1]->UP)arm_coordinate[1]->y += 0.1;
+        if(mypad[1]->DOWN)arm_coordinate[1]->y -= 0.1;
+
         vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_LOOP_MS));
-        dump();
     }
 }
