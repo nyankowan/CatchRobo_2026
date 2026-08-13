@@ -2,6 +2,8 @@
 #define CAN_PROTOCOL_H
 #include <stdint.h>
 
+#define CAN_DLC 8 //MAX
+
 //Don't use ID 0x00
 #define CAN_ID_NumItems 5
 typedef enum{

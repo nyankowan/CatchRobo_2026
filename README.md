@@ -4,6 +4,13 @@
 ## Directory structure
 ```text
 CatchRobo_2026/
+├── common/
+│   ├── can_protocol/
+│   │   └── canのidとdataの対応
+│   │
+│   └── coordinate/
+│       └── 直交，極座標変換
+│
 ├── ESP32/
 │   └── controller/
 │       └── ESP32による中央制御
@@ -22,7 +29,6 @@ CatchRobo_2026/
 - Robomaster M3508
 - Robomaster M2006
 - DS3225 Servo
-- MG90 Servo
 
 ### Communication
 - CAN (ESP32 - STM32, STM32 - Robomaster)
@@ -31,7 +37,8 @@ CatchRobo_2026/
 
 ```mermaid
 graph LR
-    Pad[Gamepad] <-->|Bluetooth| ESP32[ESP32<br>中央制御]
+    Pad1[Gamepad1] <-->|Bluetooth| ESP32[ESP32<br>中央制御]
+    Pad2[Gamepad2] <-->|Bluetooth| ESP32
 
     ESP32 --- CAN[CAN BUS]
 
@@ -41,9 +48,9 @@ graph LR
     CAN --- STM4[STM32 #4<br>Servo制御]
 
     STM1 <-->|CAN| Motor[Robomaster Motor<br>M3508/M2006]
-    STM2 -->|PWM| Servo1[DS3225 <br>MG90]
-    STM3 -->|PWM| Servo2[DS3225 <br>MG90]
-    STM4 -->|PWM| Servo3[Servo]
+    STM2 -->|PWM| Servo1[DS3225]
+    STM3 -->|PWM| Servo2[DS3225]
+    STM4 -->|PWM| Servo3[DS3225]
 ```
 
 
@@ -69,7 +76,7 @@ graph LR
 #### Software
 - STM32CubeMX
 - CMake
-- VS Code
+- VS Code + STM32CubeIDE Extension
 
 
 

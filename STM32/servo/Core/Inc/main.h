@@ -63,14 +63,41 @@ void Error_Handler(void);
 #define MCO_GPIO_Port GPIOF
 #define VCP_TX_Pin GPIO_PIN_2
 #define VCP_TX_GPIO_Port GPIOA
+#define Right_Pin GPIO_PIN_0
+#define Right_GPIO_Port GPIOB
+#define Expand_Pin GPIO_PIN_1
+#define Expand_GPIO_Port GPIOB
+#define Shaft_Pin GPIO_PIN_8
+#define Shaft_GPIO_Port GPIOA
+#define CAN_RX_Pin GPIO_PIN_11
+#define CAN_RX_GPIO_Port GPIOA
+#define CAN_TX_Pin GPIO_PIN_12
+#define CAN_TX_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
 #define SWCLK_GPIO_Port GPIOA
 #define VCP_RX_Pin GPIO_PIN_15
 #define VCP_RX_GPIO_Port GPIOA
+#define STATUS_LED_Pin GPIO_PIN_3
+#define STATUS_LED_GPIO_Port GPIOB
+#define Left_Pin GPIO_PIN_4
+#define Left_GPIO_Port GPIOB
+#define Middle_Pin GPIO_PIN_5
+#define Middle_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define Left_htim htim3
+#define Middle_htim htim3
+#define Right_htim htim3
+#define Expand_htim htim3
+#define Shaft_htim htim1
+
+#define Left_TIM_CHANNEL TIM_CHANNEL_1
+#define Middle_TIM_CHANNEL TIM_CHANNEL_2
+#define Right_TIM_CHANNEL TIM_CHANNEL_3
+#define Expand_TIM_CHANNEL TIM_CHANNEL4
+#define Shaft_TIM_CHANNEL TIM_CHANNEL1
 
 /* USER CODE END Private defines */
 
