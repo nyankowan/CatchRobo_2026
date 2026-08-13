@@ -5,8 +5,18 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-static bool ALREADY_CAN_INIT_AND_START = false;
+
 #define CAN_TAG "CAN"
+typedef struct{
+    can_rx_callback_t callback;
+    can_id_t id;
+}can_rx_callback_entry_t;
+
+static can_rx_callback_entry_t* find_callback(can_id_t id);
+
+static bool already_can_init_and_start = false;
+static int callback_entry_num = 0;
+static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NumItems] = {0};
 
 esp_err_t can_tx(can_command_data_t *com_data){
     if(com_data == NULL){
@@ -17,7 +27,7 @@ esp_err_t can_tx(can_command_data_t *com_data){
         .data_length_code = 8,
         .identifier = com_data->id,
     };
-    memcpy(msg.data, &com_data->data, sizeof(msg.data));
+    memcpy(msg.data, com_data->data.raw, sizeof(msg.data));
     switch(twai_transmit(&msg, 0)){
         case ESP_OK:
             return ESP_OK;
@@ -41,7 +51,7 @@ esp_err_t can_tx(can_command_data_t *com_data){
 }
 
 esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
-    if(ALREADY_CAN_INIT_AND_START){
+    if(already_can_init_and_start){
         ESP_LOGE(CAN_TAG, "CAN has alerady init and start.");
         return ESP_FAIL;
     }
@@ -68,10 +78,41 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
         ESP_LOGE(CAN_TAG, "CAN is not stopped.");
         return e;
     }
-    ALREADY_CAN_INIT_AND_START = true;
+    already_can_init_and_start = true;
     xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 1024, NULL, 5, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(can_rx_task, "can_rx_task", 2048, NULL, 4, NULL, APP_CPU_NUM);
+    
     return ESP_OK;
     
+}
+
+can_rx_callback_entry_t* find_callback(can_id_t id){
+    for(int i=0; i<CAN_ID_NumItems; i++){
+        if(can_rx_callback_entry_register[i].id == id)return &can_rx_callback_entry_register[i];
+    }
+    return NULL;
+}
+void can_register_rx_callback(can_id_t id, can_rx_callback_t callback){
+    can_rx_callback_entry_register[callback_entry_num].id = id;
+    can_rx_callback_entry_register[callback_entry_num].callback = callback;
+    callback_entry_num++;
+}
+
+void can_rx_task(void *arg){
+    twai_message_t msg;
+
+    while (1) {
+        if (twai_receive(&msg, portMAX_DELAY) == ESP_OK) {
+            // 登録された対応するcallbackを探す
+            can_rx_callback_entry_t* entry = find_callback(msg.identifier);
+            if (entry != NULL) {
+                can_data_t data;
+                memcpy(data.raw,msg.data,sizeof(data.raw));
+                entry->callback(&data);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
 }
 
 void can_error_handling_task(void *arg)

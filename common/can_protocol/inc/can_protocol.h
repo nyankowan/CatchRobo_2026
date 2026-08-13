@@ -2,8 +2,14 @@
 #define CAN_PROTOCOL_H
 #include <stdint.h>
 
+//Don't use ID 0x00
+#define CAN_ID_NumItems 5
 typedef enum{
-    CAN_ID_COORDINATE=0X100,
+    CAN_ID_UPPER_HOMING=0x01,
+    CAN_ID_LOWER_HOMING=0x02,
+    CAN_ID_UPPER_HOMING_DONE=0x03,
+    CAN_ID_LOWER_HOMING_DONE=0x04,
+    CAN_ID_COORDINATE=0x100,
 }can_id_t;
 typedef union{
     uint8_t raw[8];
