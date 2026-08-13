@@ -21,8 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "../../../../common/can_protocol/inc/can_protocol.h"
-#include "../../../../common/coordinate/inc/coordinate.h"
+#include "can_protocol.h"
+#include "coordinate.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,7 +32,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SERVO_0   500
+#define SERVO_270 2500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -99,8 +100,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
   switch (rx_header.StdId) {
   case CAN_ID_COORDINATE:
-      if(rx_data.arm.lower.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,1500);}
-      else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,1500);}
+      if(rx_data.arm.lower.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
+      if(rx_data.arm.lower.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
+      if(rx_data.arm.lower.right){__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+      if(rx_data.arm.lower.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+      direct_t direct = {.x = rx_data.arm.lower.x, .y = rx_data.arm.lower.y};
+      __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (1.5 * 3.14) + SERVO_0);
 
       break;
   default:

@@ -96,8 +96,8 @@ void Error_Handler(void);
 #define Left_TIM_CHANNEL TIM_CHANNEL_1
 #define Middle_TIM_CHANNEL TIM_CHANNEL_2
 #define Right_TIM_CHANNEL TIM_CHANNEL_3
-#define Expand_TIM_CHANNEL TIM_CHANNEL4
-#define Shaft_TIM_CHANNEL TIM_CHANNEL1
+#define Expand_TIM_CHANNEL TIM_CHANNEL_4
+#define Shaft_TIM_CHANNEL TIM_CHANNEL_1
 
 /* USER CODE END Private defines */
 
