@@ -98,6 +98,7 @@ HAL_StatusTypeDef can_send(can_command_data_t *com){
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
+  HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port,STATUS_LED_Pin);
   switch (rx_header.StdId) {
   case CAN_ID_COORDINATE:
       if(rx_data.arm.lower.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
@@ -106,8 +107,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
       if(rx_data.arm.lower.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
       direct_t direct = {.x = rx_data.arm.lower.x, .y = rx_data.arm.lower.y};
       __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (1.5 * 3.14) + SERVO_0);
-
       break;
+
   default:
       break;
   }
@@ -156,7 +157,11 @@ int main(void)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   HAL_CAN_Start(&hcan);
-
+  HAL_GPIO_WritePin(
+    STATUS_LED_GPIO_Port,
+    STATUS_LED_Pin,
+    GPIO_PIN_SET
+  );
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -164,7 +169,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    HAL_Delay(100);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -505,6 +510,11 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+    HAL_GPIO_TogglePin(
+    STATUS_LED_GPIO_Port,
+    STATUS_LED_Pin
+    );
+    HAL_Delay(1000);
   }
   /* USER CODE END Error_Handler_Debug */
 }
