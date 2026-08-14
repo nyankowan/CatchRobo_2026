@@ -58,7 +58,7 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
       
     // TWAI初期化  
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(tx, rx, TWAI_MODE_NORMAL);  
-    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();  
+    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_1MBITS(); 
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     esp_err_t e;
     e = twai_driver_install(&g_config, &t_config, &f_config);
@@ -79,7 +79,7 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
         return e;
     }
     already_can_init_and_start = true;
-    xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 1024, NULL, 5, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 2048, NULL, 5, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(can_rx_task, "can_rx_task", 2048, NULL, 4, NULL, APP_CPU_NUM);
     
     return ESP_OK;

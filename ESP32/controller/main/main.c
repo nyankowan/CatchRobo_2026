@@ -64,7 +64,7 @@ int app_main(void) {
     return 0;
 }
 
-#define MAIN_TASK_LOOP_MS 30
+#define MAIN_TASK_LOOP_MS 100
 #define DUMP_TASK_LOOP_MS 2000
 #define GET_MYPAD_WAIT_MS 2000
 
@@ -95,10 +95,10 @@ void main_task(void* arg){
     while(1){
         memcpy(prev_mypad,mypad,sizeof(mypad));
         get_mypad(mypad);
-        if(mypad[0].LEFT) {arm_coordinate[0]->x -= 0.1;}
-        if(mypad[0].RIGHT){arm_coordinate[0]->x += 0.1;}
-        if(mypad[0].UP)   {arm_coordinate[0]->y += 0.1;}
-        if(mypad[0].DOWN) {arm_coordinate[0]->y -= 0.1;}
+        if(mypad[0].LEFT) {arm_coordinate[0]->x -= 1;}
+        if(mypad[0].RIGHT){arm_coordinate[0]->x += 1;}
+        if(mypad[0].UP)   {arm_coordinate[0]->y += 1;}
+        if(mypad[0].DOWN) {arm_coordinate[0]->y -= 1;}
         if(PRESSED(mypad[0].A, prev_mypad[0].A)){TOGGLE(lower_hand->right,1);}
         if(PRESSED(mypad[0].X, prev_mypad[0].X)){TOGGLE(lower_hand->middle,1);}
         if(PRESSED(mypad[0].Y, prev_mypad[0].Y)){TOGGLE(lower_hand->left,1);}
@@ -106,12 +106,12 @@ void main_task(void* arg){
         
         
 
-        if(mypad[1].LEFT) {arm_coordinate[1]->x -= 0.1;}
-        if(mypad[1].RIGHT){arm_coordinate[1]->x += 0.1;}
-        if(mypad[1].UP)   {arm_coordinate[1]->y += 0.1;}
-        if(mypad[1].DOWN) {arm_coordinate[1]->y -= 0.1;}
+        if(mypad[1].LEFT) {arm_coordinate[1]->x -= 1;}
+        if(mypad[1].RIGHT){arm_coordinate[1]->x += 1;}
+        if(mypad[1].UP)   {arm_coordinate[1]->y += 1;}
+        if(mypad[1].DOWN) {arm_coordinate[1]->y -= 1;}
         if(PRESSED(mypad[1].A, prev_mypad[1].A)){TOGGLE(*upper_arm_z,10);}
-        //set_arms();
+        set_arms();
         vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_LOOP_MS));
     }
 }
