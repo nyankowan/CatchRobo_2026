@@ -2,17 +2,26 @@
 #define ARM_H
 #define ARM_NUM 2
 #include "coordinate.h"
-typedef struct{
-    unsigned int left   : 1;
-    unsigned int middle : 1;
-    unsigned int right  : 1;
-    unsigned int expand : 1;
-    unsigned int        : 4;
-}lower_hand_t;
-void get_pointer_arms_cartesian_coordinate(direct_t *arm[]);
-void get_pointer_lower_hand(lower_hand_t **h);
-void get_pointer_upper_arm_z(unsigned int **z);
+#include <esp_err.h>
+#include <stdbool.h>
+
+#define ARM_TAG "ARM"
+
+//homing中は動かない
+void lower_arm_move(
+    int16_t dx, int16_t dy,
+    bool left_toggle, bool middle_toggle, 
+    bool right_toggle, bool expand_toggle
+);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
+
+esp_err_t send_lower_arm();
+esp_err_t send_upper_arm();
+esp_err_t arms_init();
+esp_err_t lower_arm_homing();
+esp_err_t upper_arm_homing();
+void lower_arm_dump();
+void upper_arm_dump();
 void arms_dump();
-void set_arms();
-void homing();
+
 #endif //ARM_H
