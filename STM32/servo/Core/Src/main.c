@@ -51,21 +51,11 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 CAN_RxHeaderTypeDef rx_header;
-can_data_t rx_data = {
-  .arm.lower.hand = 0,
-  /*
-  *union{
-  *  uint8_t hand;
-  *  struct{
-  *      unsigned int left    : 1;
-  *      unsigned int middle  : 1;
-  *      unsigned int right   : 1;
-  *      unsigned int expand  : 1;
-  *      unsigned int         : 4;
-  *  };
-  *};
-  */
-};
+can_data_t rx_data = {0};
+
+can_data_t riveWatch_rx_data = {0};
+volatile uint32_t live_id = 0;
+volatile uint32_t rx_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,18 +89,32 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
   HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port,STATUS_LED_Pin);
+
+  live_id = rx_header.StdId;
+  rx_count++;
+
   switch (rx_header.StdId) {
-  case CAN_ID_COORDINATE:
-      if(rx_data.arm.lower.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
-      if(rx_data.arm.lower.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
-      if(rx_data.arm.lower.right){__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
-      if(rx_data.arm.lower.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
-      direct_t direct = {.x = rx_data.arm.lower.x, .y = rx_data.arm.lower.y};
-      __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (1.5 * 3.14) + SERVO_0);
-      break;
+  case CAN_ID_LOWER_ARM:
+
+    riveWatch_rx_data = rx_data;
+
+    if(rx_data.lower_arm.hand.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.hand.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.hand.right){__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.hand.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+    direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (1.5 * 3.14) + SERVO_0);
+    break;
+
+  case CAN_ID_LOWER_HOMING:
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);
+    break;
 
   default:
-      break;
+    break;
   }
 }
 /* USER CODE END 0 */
@@ -169,7 +173,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    HAL_Delay(100);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -313,7 +317,7 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -324,14 +328,14 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 1500;
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
   sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
