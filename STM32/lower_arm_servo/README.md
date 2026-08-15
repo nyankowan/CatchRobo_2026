@@ -1,4 +1,4 @@
-# STM32/servo
+# STM32/lower_arm_servo
 ```text
                  CAN
 ESP32 ──────── PA11/PA12
