@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "NUCLEO_F446RE") (type "KiCad") (uri "C:/Users/user/okarobo_dev/CatchRobo_2026/Kicad/library/NUCLEO_F446RE.pretty") (options "") (descr ""))
+)
