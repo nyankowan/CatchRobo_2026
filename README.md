@@ -1,5 +1,6 @@
 # CatchRobo_2026
-キャチロボ2026で使用する回路データおよび複数マイコンのプログラムを一括管理するリポジトリです.
+キャチロボ2026で使用する回路データおよび複数マイコンのプログラムを一括管理するリポジトリ.
+Team: OBT
 
 ## Directory structure
 ```text
@@ -16,8 +17,11 @@ CatchRobo_2026/
 │       └── ESP32による中央制御
 │
 ├── STM32/
-│   └── servo/
-│       └── サーボ制御基板
+│   ├── lower_arm_servo/
+│   │   └── 下側アームのサーボ制御基板
+│   │
+│   └── upper_arm_servo/
+│       └── 上側アームのサーボ制御基板
 │
 └── Kicad/
     └── servo/
@@ -63,7 +67,7 @@ graph LR
 - ESP32-DevKitC-32E
 
 #### Software
-- ESP-IDF v5.5.x
+- ESP-IDF v5.5.4
 - VS Code + ESP-IDF Extension
 
 
@@ -72,6 +76,7 @@ graph LR
 
 #### Hardware
 - STM32 NUCLEO-F303K8
+- STM32 NUCLEO-F446RE
 
 #### Software
 - STM32CubeMX
@@ -106,9 +111,12 @@ idf.py flash
 ```
 
 ### STM32
+
+#### Setup
+[Qiita: STM32の開発をVSCodeで行う](https://qiita.com/tanutanup/items/d680c92f5168fc3f0182) [@tanutanup(tanutanu p)様](https://qiita.com/tanutanup)
+
 #### Build
 ```bash
-cd STM32/servo
 cmake -B build
 cmake --build build
 ```
