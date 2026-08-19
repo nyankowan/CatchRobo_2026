@@ -63,7 +63,7 @@
           "min_clearance": 0.5,
           "min_island_area": 10.0,
           "min_thickness": 0.25,
-          "pad_connection": 1,
+          "pad_connection": 2,
           "remove_islands": 0,
           "thermal_relief_gap": 0.5,
           "thermal_relief_spoke_width": 0.5
@@ -260,7 +260,12 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      [
+        "missing_power_pin|685800|698500|747bb84b-9eac-4a4b-9d86-96214c9dc520|00000000-0000-0000-0000-000000000000|/842c4fd8-a2c3-4ad6-9d2c-9306837685b4|/842c4fd8-a2c3-4ad6-9d2c-9306837685b4|",
+        "Arduino header units C-F are intentionally unused."
+      ]
+    ],
     "meta": {
       "version": 0
     },
@@ -526,6 +531,7 @@
       "netlist": "",
       "plot": "",
       "specctra_dsn": "",
+      "step": "",
       "vrml": ""
     },
     "page_layout_descr_file": ""
@@ -648,7 +654,7 @@
         "uuid": "842c4fd8-a2c3-4ad6-9d2c-9306837685b4"
       }
     ],
-    "used_designators": "U1-3,#PWR1-3,H1-5",
+    "used_designators": "R1-2,D1-2,#FLG1-2,J1-10,U1-3,#PWR1-19,GD1,H1-5",
     "variants": []
   },
   "sheets": [

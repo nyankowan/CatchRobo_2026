@@ -59,12 +59,20 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
+#define UPPER_ARM_R_LIMIT_Pin GPIO_PIN_2
+#define UPPER_ARM_R_LIMIT_GPIO_Port GPIOC
+#define UPPER_ARM_DEG_UNDER_LIMIT_Pin GPIO_PIN_3
+#define UPPER_ARM_DEG_UNDER_LIMIT_GPIO_Port GPIOC
 #define USART_TX_Pin GPIO_PIN_2
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
 #define Status_LED_Pin GPIO_PIN_5
 #define Status_LED_GPIO_Port GPIOA
+#define UPPER_ARM_DEG_OVER_LIMIT_Pin GPIO_PIN_4
+#define UPPER_ARM_DEG_OVER_LIMIT_GPIO_Port GPIOC
+#define LOWER_ARM_R_LIMIT_Pin GPIO_PIN_5
+#define LOWER_ARM_R_LIMIT_GPIO_Port GPIOC
 #define ROBOMAS_CAN_RX_Pin GPIO_PIN_12
 #define ROBOMAS_CAN_RX_GPIO_Port GPIOB
 #define ROBOMAS_CAN_TX_Pin GPIO_PIN_13
@@ -77,6 +85,10 @@ void Error_Handler(void);
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
+#define LOWER_ARM_DEG_UNDER_LIMIT_Pin GPIO_PIN_10
+#define LOWER_ARM_DEG_UNDER_LIMIT_GPIO_Port GPIOC
+#define LOWER_ARM_DEG_OVER_LIMIT_Pin GPIO_PIN_11
+#define LOWER_ARM_DEG_OVER_LIMIT_GPIO_Port GPIOC
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
 
