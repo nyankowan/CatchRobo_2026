@@ -81,15 +81,49 @@ CAN RX0 interrupt -> Enable
 ```
 
 ## Code
+```C
+/* USER CODE BEGIN Private defines */
+#define Left_htim htim3
+#define Middle_htim htim3
+#define Right_htim htim3
+#define Expand_htim htim3
+#define Shaft_htim htim1
+
+#define Left_TIM_CHANNEL TIM_CHANNEL_1
+#define Middle_TIM_CHANNEL TIM_CHANNEL_2
+#define Right_TIM_CHANNEL TIM_CHANNEL_3
+#define Expand_TIM_CHANNEL TIM_CHANNEL_4
+#define Shaft_TIM_CHANNEL TIM_CHANNEL_1
+```
+
+```C
+/* USER CODE BEGIN PD */
+#define SERVO_0   500
+#define SERVO_270 2500
+```
+
+```C
+/* USER CODE BEGIN Includes */
+#include "can_protocol.h"
+#include "coordinate.h"
+#include "stm_can.h"
+#include <math.h>
+```
+
+```C
+/* USER CODE END WHILE */
+stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
+HAL_Delay(HEARTBEAT_MS);
+```
 ### PWM Start
 ```C
 /* USER CODE BEGIN 2 */
-HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+HAL_TIM_PWM_Start(&htim3, Left_TIM_CHANNEL);
+HAL_TIM_PWM_Start(&htim3, Middle_TIM_CHANNEL);
+HAL_TIM_PWM_Start(&htim3, Right_TIM_CHANNEL);
+HAL_TIM_PWM_Start(&htim3, Expand_TIM_CHANNEL);
 
-HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+HAL_TIM_PWM_Start(&htim1, Shaft_TIM_CHANNEL);
 ```
 ### PWM Set
 以下はServo1に1.5msのPWMを設定する方法．
@@ -103,27 +137,33 @@ __HAL_TIM_SET_COMPARE(
 
 ### CAN
 ```C
-/* USER CODE BEGIN Includes */
-#include "../../../../common/can_protocol/inc/can_protocol.h"
-#include "../../../../common/coordinate/inc/coordinate.h"
+/* USER CODE BEGIN PV */
+/* USER CODE BEGIN PV */
+CAN_RxHeaderTypeDef rx_header;
+can_data_t rx_data = {0};
 ```
 ```C
-/* USER CODE BEGIN PV */
-can_data_t rx_data = {
-  .arm.hand = 0,
-  /*
-  *union{
-  *  uint8_t hand;
-  *  struct{
-  *      unsigned int left    : 1;
-  *      unsigned int middle  : 1;
-  *      unsigned int right   : 1;
-  *      unsigned int expand  : 1;
-  *      unsigned int         : 4;
-  *  };
-  *};
-  */
-};
+/* USER CODE BEGIN 0 */
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+  if(hcan->Instance != CAN)return;
+  if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
+
+
+  switch (rx_header.StdId) {
+  case CAN_ID_LOWER_ARM_COMMAND:
+
+    break;
+
+  case CAN_ID_LOWER_HOMING:
+
+    break;
+  
+
+  default:
+    break;
+  }
+}
 ```
 ```C
 /* USER CODE BEGIN 2 */
@@ -132,6 +172,7 @@ HAL_CAN_Start(&hcan);
 
 ```C
 /* USER CODE BEGIN CAN_Init 2 */
+/* can_rx setting */
 CAN_FilterTypeDef filter;
 
 filter.FilterBank = 0;
@@ -153,30 +194,18 @@ if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
 if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
   Error_Handler();
 }
-```
-
-```C
-/* USER CODE BEGIN PFP */
-HAL_StatusTypeDef can_send(can_command_data_t *com);
-```
-```C
-/* USER CODE BEGIN 0 */
-HAL_StatusTypeDef can_send(can_command_data_t *com){
-  CAN_TxHeaderTypeDef tx_header;
-  uint32_t tx_mailbox;
-
-  tx_header.StdId = com->id;
-  tx_header.ExtId = 0;
-  tx_header.IDE = CAN_ID_STD;
-  tx_header.RTR = CAN_RTR_DATA;
-  tx_header.DLC = CAN_DLC; //can_protocol.h
-  tx_header.TransmitGlobalTime = DISABLE;
-
-  return HAL_CAN_AddTxMessage(&hcan,&tx_header,com->data,&tx_mailbox);
-}
+/* can_rx setting */
 ```
 
 ### LED
+```C
+/* USER CODE BEGIN 2 */
+HAL_GPIO_WritePin(
+  STATUS_LED_GPIO_Port,
+  STATUS_LED_Pin,
+  GPIO_PIN_SET
+);
+```
 ```C
 // 点灯
 HAL_GPIO_WritePin(
@@ -200,3 +229,16 @@ HAL_GPIO_TogglePin(
 ```
 
 ### Error_Handler
+```C
+/* USER CODE BEGIN Error_Handler_Debug */
+/* User can add his own implementation to report the HAL error return state */
+__disable_irq();
+while (1)
+{
+  HAL_GPIO_TogglePin(
+  STATUS_LED_GPIO_Port,
+  STATUS_LED_Pin
+  );
+  HAL_Delay(1000);
+}
+```

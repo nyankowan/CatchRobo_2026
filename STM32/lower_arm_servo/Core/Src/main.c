@@ -135,12 +135,13 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+  
+  HAL_TIM_PWM_Start(&htim3, Left_TIM_CHANNEL);
+  HAL_TIM_PWM_Start(&htim3, Middle_TIM_CHANNEL);
+  HAL_TIM_PWM_Start(&htim3, Right_TIM_CHANNEL);
+  HAL_TIM_PWM_Start(&htim3, Expand_TIM_CHANNEL);
 
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, Shaft_TIM_CHANNEL);
 
   HAL_CAN_Start(&hcan);
   HAL_GPIO_WritePin(
