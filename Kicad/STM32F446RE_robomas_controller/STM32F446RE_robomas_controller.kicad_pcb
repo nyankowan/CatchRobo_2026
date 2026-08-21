@@ -5764,6 +5764,30 @@
 			)
 		)
 	)
+	(gr_text "Catchrobo_2026 robomas_controller\n2026/8/20 K.Oshima"
+		(at 160.5 32 0)
+		(layer "B.SilkS")
+		(uuid "e4a58f7d-0c2b-4787-9e4e-8d3cdd7a3180")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+			(justify left bottom mirror)
+		)
+	)
+	(gr_text "ピン			用途					設定/信号\nPA11		ESP32側 CAN受信		CAN1_RX / COMMAND_CAN_RX\nPA12		ESP32側 CAN送信		CAN1_TX / COMMAND_CAN_TX\nPB12		RoboMaster側 CAN受信	CAN2_RX / ROBOMAS_CAN_RX\nPB13		RoboMaster側 CAN送信	CAN2_TX / ROBOMAS_CAN_TX\nPC2			上アーム R リミット			GPIO Input / Pull-up\nPC3			上アーム角度 下限			GPIO Input / Pull-up\nPC4			上アーム角度 上限			GPIO Input / Pull-up\nPC5			下アーム R リミット			GPIO Input / Pull-up\nPC10		下アーム角度 下限			GPIO Input / Pull-up\nPC11		下アーム角度 上限			GPIO Input / Pull-up\nPA5			動作確認LED			GPIO Output / Status_LED"
+		(at 142 48.5 90)
+		(layer "B.SilkS")
+		(uuid "063a9c8c-9b48-4771-963b-00de188fe075")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+			(justify left bottom mirror)
+		)
+	)
 	(segment
 		(start 92.12 60.54)
 		(end 100.9 60.54)

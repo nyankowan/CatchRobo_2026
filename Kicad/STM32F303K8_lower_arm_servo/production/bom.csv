@@ -1,0 +1,6 @@
+﻿Designator,Footprint,Quantity,Value,LCSC Part #
+D1,LED_D3.0mm,1,LED,
+J1,PinHeader_1x06_P2.54mm_Vertical,1,Servo,
+J2,PinHeader_1x05_P2.54mm_Vertical,1,CAN,
+R1,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,1,470R,
+U1,NUCLEO-F303K8,1,NUCLEO-F303K8,

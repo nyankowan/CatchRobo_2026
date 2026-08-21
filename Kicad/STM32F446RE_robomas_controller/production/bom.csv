@@ -1,0 +1,13 @@
+﻿Designator,Footprint,Quantity,Value,LCSC Part #
+D1,LED_D3.0mm,1,Status_LED,
+J1,PinHeader_1x02_P2.54mm_Vertical,1,UP_R,
+J2,PinHeader_1x02_P2.54mm_Vertical,1,UP_DEG-,
+J3,PinHeader_1x02_P2.54mm_Vertical,1,UP_DEG+,
+J4,PinHeader_1x02_P2.54mm_Vertical,1,LOW_R,
+J5,PinHeader_1x02_P2.54mm_Vertical,1,LOW_DEG-,
+J6,PinHeader_1x02_P2.54mm_Vertical,1,LOW_DEG+,
+J7,PinHeader_1x05_P2.54mm_Vertical,1,COMMAND_CAN,
+J8,PinHeader_1x05_P2.54mm_Vertical,1,ROBOMAS_CAN,
+J9,PinHeader_1x02_P2.54mm_Vertical,1,E5V,
+R1,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,1,300R,
+U3,MODULE_NUCLEO-F446RE_CN11_CN12_clearance,1,NUCLEO-F446RE,
