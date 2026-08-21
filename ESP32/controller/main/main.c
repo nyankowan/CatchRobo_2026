@@ -108,6 +108,7 @@ void main_task(void* arg){
         );
         send_upper_arm();
 
+        arms_update();
         vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_LOOP_MS));
     }
 }

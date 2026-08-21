@@ -16,7 +16,7 @@ static can_rx_callback_entry_t* find_callback(can_id_t id);
 
 static bool already_can_init_and_start = false;
 static int callback_entry_num = 0;
-static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NumItems] = {0};
+static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NUM_ITEMS] = {0};
 
 esp_err_t can_tx(can_command_data_t *com_data){
     if(com_data == NULL){
@@ -24,7 +24,7 @@ esp_err_t can_tx(can_command_data_t *com_data){
         return ESP_ERR_INVALID_ARG;
     }
     twai_message_t msg = {
-        .data_length_code = 8,
+        .data_length_code = can_protocol_get_dlc(com_data->id),
         .identifier = com_data->id,
     };
     memcpy(msg.data, com_data->data.raw, sizeof(msg.data));
@@ -87,7 +87,7 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
 }
 
 can_rx_callback_entry_t* find_callback(can_id_t id){
-    for(int i=0; i<CAN_ID_NumItems; i++){
+    for(int i=0; i<CAN_ID_NUM_ITEMS; i++){
         if(can_rx_callback_entry_register[i].id == id)return &can_rx_callback_entry_register[i];
     }
     return NULL;

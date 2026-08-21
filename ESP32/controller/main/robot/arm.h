@@ -20,6 +20,7 @@ esp_err_t send_upper_arm();
 esp_err_t arms_init();
 esp_err_t lower_arm_homing();
 esp_err_t upper_arm_homing();
+void arms_update();
 void lower_arm_dump();
 void upper_arm_dump();
 void arms_dump();
