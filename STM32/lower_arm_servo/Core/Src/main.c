@@ -23,6 +23,8 @@
 /* USER CODE BEGIN Includes */
 #include "can_protocol.h"
 #include "coordinate.h"
+#include "stm_can.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,9 +55,6 @@ UART_HandleTypeDef huart2;
 CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 
-can_data_t riveWatch_rx_data = {0};
-volatile uint32_t live_id = 0;
-volatile uint32_t rx_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,44 +65,26 @@ static void MX_CAN_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-HAL_StatusTypeDef can_send(can_command_data_t *com);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-HAL_StatusTypeDef can_send(can_command_data_t *com){
-  CAN_TxHeaderTypeDef tx_header;
-  uint32_t tx_mailbox;
-
-  tx_header.StdId = com->id;
-  tx_header.ExtId = 0;
-  tx_header.IDE = CAN_ID_STD;
-  tx_header.RTR = CAN_RTR_DATA;
-  tx_header.DLC = CAN_DLC; //can_protocol.h
-  tx_header.TransmitGlobalTime = DISABLE;
-
-  return HAL_CAN_AddTxMessage(&hcan,&tx_header,com->data.raw,&tx_mailbox);
-}
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
   HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port,STATUS_LED_Pin);
 
-  live_id = rx_header.StdId;
-  rx_count++;
-
   switch (rx_header.StdId) {
-  case CAN_ID_LOWER_ARM:
+  case CAN_ID_LOWER_ARM_COMMAND:
 
-    riveWatch_rx_data = rx_data;
-
-    if(rx_data.lower_arm.hand.left){__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.hand.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.hand.right){__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.hand.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.left)  {__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.right) {__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (1.5 * 3.14) + SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,to_polar(direct).theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
     break;
 
   case CAN_ID_LOWER_HOMING:
@@ -112,6 +93,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
     __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);
     break;
+  
 
   default:
     break;
@@ -173,7 +155,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
+    HAL_Delay(HEARTBEAT_MS);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
