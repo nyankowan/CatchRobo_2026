@@ -93,7 +93,10 @@ void Error_Handler(void);
 #define SWO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+#define COMMAND_HCAN hcan1
+#define ROBOMAS_HCAN hcan2
+#define COMMAND_CAN CAN1
+#define ROBOMAS_CAN CAN2
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

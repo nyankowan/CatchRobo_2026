@@ -21,12 +21,31 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "can_protocol.h"
+#include "coordinate.h"
+#include "stm32f4xx_hal_can.h"
+#include "stm_can.h"
+#include <math.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct
+{
+    uint16_t angle_raw;
 
+    int32_t total_angle;
+
+    int16_t rpm;
+    int16_t current;
+    uint8_t temperature;
+
+    uint16_t last_angle;
+
+    uint32_t last_update;
+
+} robomas_feedback_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -47,6 +66,10 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+
+//Sending robomas value setting
+int16_t robomas_tx_torque[4]={0,0,0,0}; // {ID.1,ID.2,ID.3,ID.4}
+robomas_feedback_t robomas_rx[4] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -56,12 +79,93 @@ static void MX_CAN1_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+void command_receive(can_command_data_t *com);
+void robomas_receive(uint8_t robomas_id, uint8_t *data);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+  CAN_RxHeaderTypeDef rx_header;
+  uint8_t rx_data[8];
+  if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data) != HAL_OK)return;
+  if (hcan->Instance == COMMAND_CAN) {
+    can_command_data_t com = {
+      .id = rx_header.StdId,
+    };
+    memcpy(com.data.raw, rx_data, rx_header.DLC);
+    command_receive(&com);
+  }else if (hcan->Instance == ROBOMAS_CAN) {
+    if (rx_header.IDE != CAN_ID_STD || (rx_header.StdId < 0x201 || rx_header.StdId > 0x204))return;
+    uint8_t robomas_id = rx_header.StdId - 0x201; // 201→0, 202→1, 203→2
+    robomas_receive(robomas_id, rx_data);
+  }
+}
 
+void command_receive(can_command_data_t *com){
+  switch (com->id) {
+  case CAN_ID_LOWER_ARM_COMMAND:
+    //com->data.lower_arm
+
+  break;  
+  case CAN_ID_UPPER_ARM_COMMAND:
+    //com->data.upper_arm
+
+  break;
+  case CAN_ID_UPPER_HOMING:
+    
+  break;
+  case CAN_ID_LOWER_HOMING:
+
+  break;
+
+  default:
+  break;
+  }
+}
+
+void robomas_receive(uint8_t robomas_id, uint8_t *data){
+// Robomasterからのフィードバック
+  robomas_rx[robomas_id].angle_raw =   ((uint16_t)data[0] << 8) | data[1];
+  robomas_rx[robomas_id].rpm =         ((int16_t)data[2] << 8) | data[3];
+  robomas_rx[robomas_id].current =     ((int16_t)data[4] << 8) | data[5];
+  robomas_rx[robomas_id].temperature = data[6]; 
+  
+  int16_t delta = robomas_rx[robomas_id].angle_raw - robomas_rx[robomas_id].last_angle;
+
+  if (delta > 4096){
+      delta -= 8192;
+  }else if (delta < -4096){
+      delta += 8192;
+  }
+
+  robomas_rx[robomas_id].total_angle += delta;
+  robomas_rx[robomas_id].last_angle = robomas_rx[robomas_id].angle_raw;
+  robomas_rx[robomas_id].last_update = HAL_GetTick();// temp
+}
+
+void robomas_send_torque(int16_t *torque){
+  if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&ROBOMAS_HCAN)){
+    CAN_TxHeaderTypeDef TxHeader;
+    uint32_t TxMailbox;
+    uint8_t TxData[8];
+    TxHeader.StdId = 0x200;                 // CAN ID
+    TxHeader.RTR = CAN_RTR_DATA;            // フレームタイプはデータフレーム
+    TxHeader.IDE = CAN_ID_STD;              // 標準ID(11ﾋﾞｯﾄ)
+    TxHeader.DLC = 8;                       // データ長は8バイトに
+    TxHeader.TransmitGlobalTime = DISABLE;  // ???
+    TxData[0] = torque[0] >> 8 & 0x00FF;
+    TxData[1] = torque[0] & 0x00FF;
+    TxData[2] = torque[1] >> 8 & 0x00FF;
+    TxData[3] = torque[1] & 0x00FF;
+    TxData[4] = torque[2] >> 8 & 0x00FF;
+    TxData[5] = torque[2] & 0x00FF;
+    TxData[6] = torque[3] >> 8 & 0x00FF;
+    TxData[7] = torque[3] & 0x00FF;   
+    HAL_CAN_AddTxMessage(&ROBOMAS_HCAN, &TxHeader, TxData, &TxMailbox);
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -72,7 +176,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -98,6 +201,18 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_CAN_Start(&hcan1);
+  HAL_CAN_Start(&hcan2);
+
+  HAL_CAN_ActivateNotification(
+      &hcan1,
+      CAN_IT_RX_FIFO0_MSG_PENDING
+  );
+
+  HAL_CAN_ActivateNotification(
+      &hcan2,
+      CAN_IT_RX_FIFO0_MSG_PENDING
+  );
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,7 +220,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_ROBOMAS_CONTROLLER_HEARTBEAT});
+    HAL_Delay(HEARTBEAT_MS);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -190,7 +306,20 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
+  CAN_FilterTypeDef filter = {0};
 
+  filter.FilterBank = 0;
+  filter.SlaveStartFilterBank = 14;
+  filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  filter.FilterScale = CAN_FILTERSCALE_32BIT;
+  filter.FilterIdHigh = 0;
+  filter.FilterIdLow = 0;
+  filter.FilterMaskIdHigh = 0;
+  filter.FilterMaskIdLow = 0;
+  filter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  filter.FilterActivation = ENABLE;
+
+  HAL_CAN_ConfigFilter(&hcan1, &filter);
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -228,6 +357,19 @@ static void MX_CAN2_Init(void)
   }
   /* USER CODE BEGIN CAN2_Init 2 */
 
+  CAN_FilterTypeDef filter = {0};
+  filter.FilterBank = 14;
+  filter.SlaveStartFilterBank = 14;
+  filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  filter.FilterScale = CAN_FILTERSCALE_32BIT;
+  filter.FilterIdHigh = 0;
+  filter.FilterIdLow = 0;
+  filter.FilterMaskIdHigh = 0;
+  filter.FilterMaskIdLow = 0;
+  filter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  filter.FilterActivation = ENABLE;
+
+  HAL_CAN_ConfigFilter(&hcan2, &filter);
   /* USER CODE END CAN2_Init 2 */
 
 }

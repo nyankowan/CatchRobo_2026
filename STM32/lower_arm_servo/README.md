@@ -168,6 +168,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 ```C
 /* USER CODE BEGIN 2 */
 HAL_CAN_Start(&hcan);
+if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+  Error_Handler();
+}
 ```
 
 ```C
@@ -190,9 +193,6 @@ filter.FilterActivation = ENABLE;
 
 if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
     Error_Handler();
-}
-if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
-  Error_Handler();
 }
 /* can_rx setting */
 ```

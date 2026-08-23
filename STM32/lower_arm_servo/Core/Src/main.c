@@ -144,6 +144,9 @@ int main(void)
   HAL_TIM_PWM_Start(&htim1, Shaft_TIM_CHANNEL);
 
   HAL_CAN_Start(&hcan);
+  if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+    Error_Handler();
+  }
   HAL_GPIO_WritePin(
     STATUS_LED_GPIO_Port,
     STATUS_LED_Pin,
@@ -256,9 +259,6 @@ static void MX_CAN_Init(void)
 
   if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
       Error_Handler();
-  }
-  if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
-    Error_Handler();
   }
   /* can_rx setting */
   /* USER CODE END CAN_Init 2 */
