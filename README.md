@@ -17,11 +17,18 @@ CatchRobo_2026/
 │       └── ESP32による中央制御
 │
 ├── STM32/
-│   ├── lower_arm_servo/
-│   │   └── 下側アームのサーボ制御基板
+│   ├── common/
+│   │   └── can
+│   │       └── ESP-STM間のcanの処理
 │   │
-│   └── upper_arm_servo/
-│       └── 上側アームのサーボ制御基板
+│   ├── lower_arm_servo/
+│   │   └── 下側アームのサーボ制御
+│   │
+│   ├── upper_arm_servo/
+│   │   └── 上側アームのサーボ制御
+│   │
+|   └── robomas_controller/
+│       └── 両アームのロボマス制御
 │
 └── Kicad/
     └── servo/
