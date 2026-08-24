@@ -151,20 +151,27 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void command_receive(can_command_data_t *com){
   switch (com->id) {
   case CAN_ID_LOWER_ARM_COMMAND:
-    //com->data.lower_arm
+    if(robomas_lower_r.state != ROBOMAS_READY || robomas_lower_deg.state != ROBOMAS_READY)return;
+    coordinate_lower.x = com->data.lower_arm.x;
+    coordinate_lower.y = com->data.lower_arm.y;
 
   break;  
   case CAN_ID_UPPER_ARM_COMMAND:
-    //com->data.upper_arm
+    if(robomas_upper_r.state != ROBOMAS_READY || robomas_upper_deg.state != ROBOMAS_READY)return;
+    coordinate_upper.x = com->data.upper_arm.x;
+    coordinate_upper.y = com->data.upper_arm.y;
 
   break;
   case CAN_ID_UPPER_HOMING:
-    
+    robomas_upper_r.state = ROBOMAS_HOMING;
+    robomas_upper_deg.state = ROBOMAS_HOMING;
+
   break;
   case CAN_ID_LOWER_HOMING:
+    robomas_lower_r.state = ROBOMAS_HOMING;
+    robomas_lower_deg.state = ROBOMAS_HOMING;
 
   break;
-
   default:
   break;
   }
