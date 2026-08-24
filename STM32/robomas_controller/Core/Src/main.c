@@ -23,9 +23,11 @@
 /* USER CODE BEGIN Includes */
 #include "can_protocol.h"
 #include "coordinate.h"
+#include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_can.h"
 #include "stm_can.h"
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -41,16 +43,48 @@ typedef struct
     int16_t current;
     uint8_t temperature;
 
-    uint16_t last_angle;
+    uint16_t last_angle; //to calc total_angle
 
-    uint32_t last_update;
+    uint32_t last_update; // 最後に受信した時間 HAL_GetTick()
 
 } robomas_feedback_t;
+
+typedef struct{
+  double p;   //比例ゲイン
+  double i;   //積分ゲイン
+  double d;   //微分ゲイン
+  double mv;  //manipulated value 操作量
+  double sv;  //set value 目標値
+  double it;  //integral term 積分項 偏差の総和
+  double pe;  //previous error 直前の偏差
+  double pv;  //process value 制御量 フィードバック
+  uint32_t last_update;  // 最後に更新した時間 HAL_GetTick()
+}pid_t;
+
+typedef enum{
+  ROBOMAS_HOMING, // 速度制御によって，リミットスイッチ位置まで回転する
+  ROBOMAS_IDLE,   // ホーミング終了による他のホーミングを待機
+  ROBOMAS_READY,  // ユーザが制御可能な状態
+}robomas_state_t;
+
+typedef struct{
+  robomas_feedback_t feedback;
+  pid_t pid;
+  robomas_state_t state;
+
+}robomas_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define R_ROBOMAS_DIAMETER 30 //アーム長ロボマスにつくギアの直径(mm)
+#define LOWER_R_MIN 200 //ToDo: アーム長を一番短くしたときのR(mm)を測る
+#define POLAR_RATIO 2.6666666 //= 8/3 アーム角度ロボマスの直径比
 
+#define ARM_HOME_COORDINATE {\
+  .x = LOWER_R_MIN,\
+  .y = 0,\
+}
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,11 +99,22 @@ CAN_HandleTypeDef hcan2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+direct_t coordinate[2] = {ARM_HOME_COORDINATE, ARM_HOME_COORDINATE};
+#define coordinate_lower coordinate[0]
+#define coordinate_upper coordinate[1]
 
 //Sending robomas value setting
 int16_t robomas_tx_torque[4]={0,0,0,0}; // {ID.1,ID.2,ID.3,ID.4}
-robomas_feedback_t robomas_rx[4] = {0};
+#define robomas_lower_r_tx_torque robomas_tx_torque[0]
+#define robomas_lower_deg_tx_torque robomas_tx_torque[1]
+#define robomas_upper_r_tx_torque robomas_tx_torque[2]
+#define robomas_upper_deg_tx_torque robomas_tx_torque[3]
+ 
+robomas_feedback_t robomas_feedback[4] = {0};
+#define robomas_feedback_lower_r robomas_feedback[0]
+#define robomas_feedback_lower_deg robomas_feedback[1]
+#define robomas_feedback_upper_r robomas_feedback[2]
+#define robomas_feedback_upper_deg robomas_feedback[3]
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -127,12 +172,12 @@ void command_receive(can_command_data_t *com){
 
 void robomas_receive(uint8_t robomas_id, uint8_t *data){
 // Robomasterからのフィードバック
-  robomas_rx[robomas_id].angle_raw =   ((uint16_t)data[0] << 8) | data[1];
-  robomas_rx[robomas_id].rpm =         ((int16_t)data[2] << 8) | data[3];
-  robomas_rx[robomas_id].current =     ((int16_t)data[4] << 8) | data[5];
-  robomas_rx[robomas_id].temperature = data[6]; 
+  robomas_feedback[robomas_id].angle_raw =   ((uint16_t)data[0] << 8) | data[1];
+  robomas_feedback[robomas_id].rpm =         ((int16_t)data[2] << 8) | data[3];
+  robomas_feedback[robomas_id].current =     ((int16_t)data[4] << 8) | data[5];
+  robomas_feedback[robomas_id].temperature = data[6]; 
   
-  int16_t delta = robomas_rx[robomas_id].angle_raw - robomas_rx[robomas_id].last_angle;
+  int16_t delta = robomas_feedback[robomas_id].angle_raw - robomas_feedback[robomas_id].last_angle;
 
   if (delta > 4096){
       delta -= 8192;
@@ -140,9 +185,9 @@ void robomas_receive(uint8_t robomas_id, uint8_t *data){
       delta += 8192;
   }
 
-  robomas_rx[robomas_id].total_angle += delta;
-  robomas_rx[robomas_id].last_angle = robomas_rx[robomas_id].angle_raw;
-  robomas_rx[robomas_id].last_update = HAL_GetTick();// temp
+  robomas_feedback[robomas_id].total_angle += delta;
+  robomas_feedback[robomas_id].last_angle = robomas_feedback[robomas_id].angle_raw;
+  robomas_feedback[robomas_id].last_update = HAL_GetTick();// temp
 }
 
 void robomas_send_torque(int16_t *torque){
@@ -165,6 +210,40 @@ void robomas_send_torque(int16_t *torque){
     TxData[7] = torque[3] & 0x00FF;   
     HAL_CAN_AddTxMessage(&ROBOMAS_HCAN, &TxHeader, TxData, &TxMailbox);
   }
+}
+/**
+* @brief 目標値spに基づいてpid式で操作量mvを計算する．
+* @return 操作量を返す
+  double p;   //比例ゲイン
+  double i;   //積分ゲイン
+  double d;   //微分ゲイン
+  double mv;  //manipulated value 操作量
+  double sv;  //set value 目標値
+  double it;  //integral term 積分項 偏差の総和
+  double pe;  //previous error 直前の偏差
+  double pv;  //process value 制御量 フィードバック
+*/
+double calc_pid(pid_t *pid){
+  uint32_t now = HAL_GetTick();
+  if(now == pid->last_update)return pid->mv;
+  double delta_sec = (now - pid->last_update)/1000.0;
+  double e =  pid->sv - pid->pv; //erro 偏差
+  double dt = (e - pid->pe)/delta_sec; //derivative term 微分項
+  pid->it += e * delta_sec;
+  pid->mv = pid->p * e + pid->i * pid->it + pid->d * dt;
+  pid->pe = e;
+  pid->last_update = now;
+  return pid->mv;
+}
+
+/**
+* @brief 積分項，直前の偏差，操作量をリセット．last_updateも更新する．
+*/
+void pid_reset(pid_t *pid){
+    pid->it = 0.0;
+    pid->pe = 0.0;
+    pid->mv = 0.0;
+    pid->last_update = HAL_GetTick();
 }
 /* USER CODE END 0 */
 
