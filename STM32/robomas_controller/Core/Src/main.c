@@ -109,12 +109,12 @@ int16_t robomas_tx_torque[4]={0,0,0,0}; // {ID.1,ID.2,ID.3,ID.4}
 #define robomas_lower_deg_tx_torque robomas_tx_torque[1]
 #define robomas_upper_r_tx_torque robomas_tx_torque[2]
 #define robomas_upper_deg_tx_torque robomas_tx_torque[3]
- 
-robomas_feedback_t robomas_feedback[4] = {0};
-#define robomas_feedback_lower_r robomas_feedback[0]
-#define robomas_feedback_lower_deg robomas_feedback[1]
-#define robomas_feedback_upper_r robomas_feedback[2]
-#define robomas_feedback_upper_deg robomas_feedback[3]
+
+robomas_t robomas[4] = {0};
+#define robomas_lower_r robomas[0]
+#define robomas_lower_deg robomas[1]
+#define robomas_upper_r robomas[2]
+#define robomas_upper_deg robomas[3]
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -172,12 +172,12 @@ void command_receive(can_command_data_t *com){
 
 void robomas_receive(uint8_t robomas_id, uint8_t *data){
 // Robomasterからのフィードバック
-  robomas_feedback[robomas_id].angle_raw =   ((uint16_t)data[0] << 8) | data[1];
-  robomas_feedback[robomas_id].rpm =         ((int16_t)data[2] << 8) | data[3];
-  robomas_feedback[robomas_id].current =     ((int16_t)data[4] << 8) | data[5];
-  robomas_feedback[robomas_id].temperature = data[6]; 
+  robomas[robomas_id].feedback.angle_raw =   ((uint16_t)data[0] << 8) | data[1];
+  robomas[robomas_id].feedback.rpm =         ((int16_t)data[2] << 8) | data[3];
+  robomas[robomas_id].feedback.current =     ((int16_t)data[4] << 8) | data[5];
+  robomas[robomas_id].feedback.temperature = data[6]; 
   
-  int16_t delta = robomas_feedback[robomas_id].angle_raw - robomas_feedback[robomas_id].last_angle;
+  int16_t delta = robomas[robomas_id].feedback.angle_raw - robomas[robomas_id].feedback.last_angle;
 
   if (delta > 4096){
       delta -= 8192;
@@ -185,9 +185,9 @@ void robomas_receive(uint8_t robomas_id, uint8_t *data){
       delta += 8192;
   }
 
-  robomas_feedback[robomas_id].total_angle += delta;
-  robomas_feedback[robomas_id].last_angle = robomas_feedback[robomas_id].angle_raw;
-  robomas_feedback[robomas_id].last_update = HAL_GetTick();// temp
+  robomas[robomas_id].feedback.total_angle += delta;
+  robomas[robomas_id].feedback.last_angle = robomas[robomas_id].feedback.angle_raw;
+  robomas[robomas_id].feedback.last_update = HAL_GetTick();// temp
 }
 
 void robomas_send_torque(int16_t *torque){
