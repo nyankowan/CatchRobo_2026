@@ -25,6 +25,7 @@
 #include "coordinate.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_can.h"
+#include "stm32f4xx_hal_gpio.h"
 #include "stm_can.h"
 #include <math.h>
 #include <stdint.h>
@@ -69,14 +70,19 @@ typedef enum{
 
 typedef struct{
   robomas_feedback_t feedback;
-  pid_t pid;
+  pid_t speed_pid;
+  pid_t pos_pid;
   robomas_state_t state;
+  int32_t total_angle_home;
+  int16_t tx_torque;
 
 }robomas_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ROBOMAS_NUM 4
+#define ARM_NUM 2
 #define R_ROBOMAS_DIAMETER 30 //アーム長ロボマスにつくギアの直径(mm)
 #define LOWER_R_MIN 200 //ToDo: アーム長を一番短くしたときのR(mm)を測る
 #define POLAR_RATIO 2.6666666 //= 8/3 アーム角度ロボマスの直径比
@@ -99,18 +105,16 @@ CAN_HandleTypeDef hcan2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-direct_t coordinate[2] = {ARM_HOME_COORDINATE, ARM_HOME_COORDINATE};
+direct_t coordinate[ARM_NUM] = {ARM_HOME_COORDINATE, ARM_HOME_COORDINATE};
 #define coordinate_lower coordinate[0]
 #define coordinate_upper coordinate[1]
 
-//Sending robomas value setting
-int16_t robomas_tx_torque[4]={0,0,0,0}; // {ID.1,ID.2,ID.3,ID.4}
-#define robomas_lower_r_tx_torque robomas_tx_torque[0]
-#define robomas_lower_deg_tx_torque robomas_tx_torque[1]
-#define robomas_upper_r_tx_torque robomas_tx_torque[2]
-#define robomas_upper_deg_tx_torque robomas_tx_torque[3]
-
-robomas_t robomas[4] = {0};
+robomas_t robomas[ROBOMAS_NUM] = {
+  {.state = ROBOMAS_HOMING,},
+  {.state = ROBOMAS_HOMING},
+  {.state = ROBOMAS_HOMING},
+  {.state = ROBOMAS_HOMING},
+};
 #define robomas_lower_r robomas[0]
 #define robomas_lower_deg robomas[1]
 #define robomas_upper_r robomas[2]
@@ -197,7 +201,7 @@ void robomas_receive(uint8_t robomas_id, uint8_t *data){
   robomas[robomas_id].feedback.last_update = HAL_GetTick();// temp
 }
 
-void robomas_send_torque(int16_t *torque){
+void robomas_send_torque(robomas_t rb[]){
   if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&ROBOMAS_HCAN)){
     CAN_TxHeaderTypeDef TxHeader;
     uint32_t TxMailbox;
@@ -207,14 +211,14 @@ void robomas_send_torque(int16_t *torque){
     TxHeader.IDE = CAN_ID_STD;              // 標準ID(11ﾋﾞｯﾄ)
     TxHeader.DLC = 8;                       // データ長は8バイトに
     TxHeader.TransmitGlobalTime = DISABLE;  // ???
-    TxData[0] = torque[0] >> 8 & 0x00FF;
-    TxData[1] = torque[0] & 0x00FF;
-    TxData[2] = torque[1] >> 8 & 0x00FF;
-    TxData[3] = torque[1] & 0x00FF;
-    TxData[4] = torque[2] >> 8 & 0x00FF;
-    TxData[5] = torque[2] & 0x00FF;
-    TxData[6] = torque[3] >> 8 & 0x00FF;
-    TxData[7] = torque[3] & 0x00FF;   
+    TxData[0] = rb[0].tx_torque >> 8 & 0x00FF;
+    TxData[1] = rb[0].tx_torque & 0x00FF;
+    TxData[2] = rb[1].tx_torque >> 8 & 0x00FF;
+    TxData[3] = rb[1].tx_torque & 0x00FF;
+    TxData[4] = rb[2].tx_torque >> 8 & 0x00FF;
+    TxData[5] = rb[2].tx_torque & 0x00FF;
+    TxData[6] = rb[3].tx_torque >> 8 & 0x00FF;
+    TxData[7] = rb[3].tx_torque & 0x00FF;   
     HAL_CAN_AddTxMessage(&ROBOMAS_HCAN, &TxHeader, TxData, &TxMailbox);
   }
 }
@@ -252,6 +256,68 @@ void pid_reset(pid_t *pid){
     pid->mv = 0.0;
     pid->last_update = HAL_GetTick();
 }
+
+/*in main roop begin*/
+void upper_homing(){
+  if(robomas_upper_r.state == ROBOMAS_IDLE && robomas_upper_deg.state == ROBOMAS_IDLE){
+    pid_reset(&robomas_upper_r.speed_pid);
+    pid_reset(&robomas_upper_r.pos_pid);
+    pid_reset(&robomas_upper_deg.speed_pid);
+  
+    pid_reset(&robomas_upper_deg.pos_pid);
+    
+    robomas_upper_r.state = ROBOMAS_READY;
+    robomas_upper_deg.state = ROBOMAS_READY;
+  }
+
+  if(HAL_GPIO_ReadPin(UPPER_ARM_DEG_UNDER_LIMIT_GPIO_Port, UPPER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
+    robomas_upper_deg.state = ROBOMAS_IDLE;
+    robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle;
+    pid_reset(&robomas_upper_deg.speed_pid);
+    pid_reset(&robomas_upper_deg.pos_pid);
+  }
+    
+  if(HAL_GPIO_ReadPin(UPPER_ARM_R_LIMIT_GPIO_Port, UPPER_ARM_R_LIMIT_Pin) == GPIO_PIN_SET){
+    robomas_upper_r.state = ROBOMAS_IDLE;
+    robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle;
+    pid_reset(&robomas_upper_r.speed_pid);
+    pid_reset(&robomas_upper_r.pos_pid);
+  }
+}
+
+void lower_homing(){
+  if(robomas_lower_r.state == ROBOMAS_IDLE && robomas_lower_deg.state == ROBOMAS_IDLE){
+    pid_reset(&robomas_lower_r.speed_pid);
+    pid_reset(&robomas_lower_r.pos_pid);
+    pid_reset(&robomas_lower_deg.speed_pid);
+    pid_reset(&robomas_lower_deg.pos_pid);
+    robomas_lower_r.state = ROBOMAS_READY;
+    robomas_lower_deg.state = ROBOMAS_READY;
+  }
+
+  if(HAL_GPIO_ReadPin(LOWER_ARM_DEG_UNDER_LIMIT_GPIO_Port, LOWER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
+    robomas_lower_deg.state = ROBOMAS_IDLE;
+    robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle;
+    pid_reset(&robomas_lower_deg.speed_pid);
+    pid_reset(&robomas_lower_deg.pos_pid);
+  }
+    
+  if(HAL_GPIO_ReadPin(LOWER_ARM_R_LIMIT_GPIO_Port, LOWER_ARM_R_LIMIT_Pin) == GPIO_PIN_SET){
+    robomas_lower_r.state = ROBOMAS_IDLE;
+    robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle;
+    pid_reset(&robomas_lower_r.speed_pid);
+    pid_reset(&robomas_lower_r.pos_pid);
+  }
+}
+
+void robomas_update(robomas_t *rb){
+
+}
+
+/*in main roop end*/
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -262,6 +328,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  uint32_t last_heartbeat = HAL_GetTick();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -306,8 +373,19 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_ROBOMAS_CONTROLLER_HEARTBEAT});
-    HAL_Delay(HEARTBEAT_MS);
+    if(robomas_upper_r.state != ROBOMAS_READY && robomas_upper_deg.state != ROBOMAS_READY)upper_homing();
+    if(robomas_lower_r.state != ROBOMAS_READY && robomas_lower_deg.state != ROBOMAS_READY)lower_homing();
+
+    for(int i = 0; i < ROBOMAS_NUM; i++){
+      robomas_update(&robomas[i]);
+    }
+
+    robomas_send_torque(robomas);
+    
+    if(HAL_GetTick() - last_heartbeat > HEARTBEAT_MS){
+      last_heartbeat = HAL_GetTick();
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_ROBOMAS_CONTROLLER_HEARTBEAT});
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
