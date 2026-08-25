@@ -24,6 +24,7 @@
 #include "coordinate.h"
 #include "arm.h"
 #include "led.h"
+#include "micon_connection.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -59,6 +60,8 @@ int app_main(void) {
 
     led_init();
     arms_init();
+    micon_connection_init();
+
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
     xTaskCreatePinnedToCore(main_task, "main_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(dump_task, "dump_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
@@ -68,7 +71,7 @@ int app_main(void) {
     return 0;
 }
 
-#define MAIN_TASK_LOOP_MS 100
+#define MAIN_TASK_LOOP_MS 130
 #define DUMP_TASK_LOOP_MS 2000
 #define GET_MYPAD_WAIT_MS 2000
 
@@ -83,6 +86,8 @@ void dump_task(void* arg){
         mypad_dump(&mp[1]);
         logi("\n");
         arms_dump();
+        micon_connection_dump();
+        logi("\n");
         vTaskDelay(pdMS_TO_TICKS(DUMP_TASK_LOOP_MS));
     }
 }
@@ -96,6 +101,7 @@ void main_task(void* arg){
 
         led_set_level(CONTROLLER_1_LED_GPIO, mypad[0].connected);
         led_set_level(CONTROLLER_2_LED_GPIO, mypad[1].connected);
+        led_set_level(ROBOMAS_CONTROLLER_STATUS_LED_GPIO, get_connection(MICON_TYPE_ROBOMAS_CONTROLLER));
         
         lower_arm_move(
             mypad[0].RIGHT - mypad[0].LEFT,
@@ -114,6 +120,7 @@ void main_task(void* arg){
         );
         send_upper_arm();
 
+        micon_connection_update();
         arms_update();
         vTaskDelay(pdMS_TO_TICKS(MAIN_TASK_LOOP_MS));
     }

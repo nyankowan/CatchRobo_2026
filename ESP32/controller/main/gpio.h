@@ -4,7 +4,7 @@
 #define CAN_TX_GPIO 21
 #define CAN_RX_GPIO 22
 
-#define CAN_STATUS_LED_GPIO                  25
+#define CAN_STATUS_LED_GPIO                 25
 #define LOWER_ARM_STATUS_LED_GPIO           26
 #define UPPER_ARM_STATUS_LED_GPIO           27
 #define ROBOMAS_CONTROLLER_STATUS_LED_GPIO  32
