@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 
+
 #include <btstack_port_esp32.h>
 #include <btstack_run_loop.h>
 
@@ -22,6 +23,7 @@
 #include "procon_data.h"
 #include "coordinate.h"
 #include "arm.h"
+#include "led.h"
 
 // Sanity check
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -55,6 +57,7 @@ int app_main(void) {
     // Init Bluepad32.
     uni_init(0 /* argc */, NULL /* argv */);
 
+    led_init();
     arms_init();
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
     xTaskCreatePinnedToCore(main_task, "main_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
@@ -91,6 +94,9 @@ void main_task(void* arg){
         memcpy(prev_mypad,mypad,sizeof(mypad));
         get_mypad(mypad);
 
+        led_set_level(CONTROLLER_1_LED_GPIO, mypad[0].connected);
+        led_set_level(CONTROLLER_2_LED_GPIO, mypad[1].connected);
+        
         lower_arm_move(
             mypad[0].RIGHT - mypad[0].LEFT,
             mypad[0].UP - mypad[0].DOWN,
