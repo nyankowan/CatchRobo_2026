@@ -79,7 +79,7 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
         return e;
     }
     already_can_init_and_start = true;
-    xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 2048, NULL, 5, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 3000, NULL, 5, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(can_rx_task, "can_rx_task", 2048, NULL, 4, NULL, APP_CPU_NUM);
     
     return ESP_OK;
