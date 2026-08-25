@@ -50,6 +50,17 @@ typedef struct
 
 } robomas_feedback_t;
 
+/**
+* @param double p;   比例ゲイン 
+* @param double i;   積分ゲイン
+* @param double d;   微分ゲイン
+* @param double mv;  manipulated value 操作量
+* @param double sv;  set value 目標値
+* @param double it;  integral term 積分項 偏差の総和
+* @param double pe;  previous error 直前の偏差
+* @param double pv;  process value 制御量 フィードバック
+* @param uint32_t last_update;   最後に更新した時間 HAL_GetTick()
+**/
 typedef struct{
   double p;   //比例ゲイン
   double i;   //積分ゲイン
@@ -62,6 +73,11 @@ typedef struct{
   uint32_t last_update;  // 最後に更新した時間 HAL_GetTick()
 }pid_t;
 
+/**
+* @param ROBOMAS_HOMING, // 速度制御によって，リミットスイッチ位置まで回転する
+* @param ROBOMAS_IDLE,   // ホーミング終了による他のホーミングを待機
+* @param ROBOMAS_READY,  // ユーザが制御可能な状態
+ */
 typedef enum{
   ROBOMAS_HOMING, // 速度制御によって，リミットスイッチ位置まで回転する
   ROBOMAS_IDLE,   // ホーミング終了による他のホーミングを待機
@@ -70,8 +86,8 @@ typedef enum{
 
 typedef struct{
   robomas_feedback_t feedback;
-  pid_t speed_pid;
-  pid_t pos_pid;
+  pid_t rpm_pid;
+  pid_t ang_pid;
   robomas_state_t state;
   int32_t total_angle_home;
   int16_t tx_torque;
@@ -81,11 +97,25 @@ typedef struct{
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LOOP_MS 2
+#define ROBOMAS_FEEDBACK_TIMEOUT_MS 100
+
 #define ROBOMAS_NUM 4
 #define ARM_NUM 2
-#define R_ROBOMAS_DIAMETER 30 //アーム長ロボマスにつくギアの直径(mm)
-#define LOWER_R_MIN 200 //ToDo: アーム長を一番短くしたときのR(mm)を測る
-#define POLAR_RATIO 2.6666666 //= 8/3 アーム角度ロボマスの直径比
+#define MAX_TORQUE 32000 //ロボマスに送る最大電流値
+#define R_ROBOMAS_DIAMETER 30.0 //アーム長ロボマスにつくギアの直径(mm)
+#define LOWER_R_MIN 200.0//ToDo: アーム長を一番短くしたときのR(mm)を測る
+#define POLAR_RATIO (8.0/3.0) //アーム軸/モーター軸　直径比
+#define UPPER_ARM_R_RANGE 700.0 //ToDo: 上側アームのアーム長可動域(mm)
+#define LOWER_ARM_R_RANGE 830.0 //ToDo: 下側アームのアーム長可動域(mm)
+#define ARM_DEG_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
+#define ARM_R_DIRECTION -1 //アームが伸びる方向が正でモーター右ねじ正
+
+#define HOMING_DEG_RPM 6 //5秒以内にホーミングが完了する 0.5[rotaion] / (5/60)[minuites]
+#define HOMING_UPPER_R_RPM ((UPPER_ARM_R_RANGE/(R_ROBOMAS_DIAMETER * M_PI)) / (5.0/60.0)) //5秒以内にホーミングが完了する
+#define HOMING_LOWER_R_RPM ((LOWER_ARM_R_RANGE/(R_ROBOMAS_DIAMETER * M_PI)) / (5.0/60.0)) //5秒以内にホーミングが完了する
+
+#define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
 #define ARM_HOME_COORDINATE {\
   .x = LOWER_R_MIN,\
@@ -110,10 +140,18 @@ direct_t coordinate[ARM_NUM] = {ARM_HOME_COORDINATE, ARM_HOME_COORDINATE};
 #define coordinate_upper coordinate[1]
 
 robomas_t robomas[ROBOMAS_NUM] = {
-  {.state = ROBOMAS_HOMING,},
-  {.state = ROBOMAS_HOMING},
-  {.state = ROBOMAS_HOMING},
-  {.state = ROBOMAS_HOMING},
+  {.state = ROBOMAS_HOMING, .rpm_pid = {
+    .p = 10, .i = 0, .d = 0,
+  }},
+  {.state = ROBOMAS_HOMING, .rpm_pid = {
+    .p = 10, .i = 0, .d = 0,
+  }},
+  {.state = ROBOMAS_HOMING, .rpm_pid = {
+    .p = 10, .i = 0, .d = 0,
+  }},
+  {.state = ROBOMAS_HOMING, .rpm_pid = {
+    .p = 10, .i = 0, .d = 0,
+  }},
 };
 #define robomas_lower_r robomas[0]
 #define robomas_lower_deg robomas[1]
@@ -202,6 +240,10 @@ void robomas_receive(uint8_t robomas_id, uint8_t *data){
 }
 
 void robomas_send_torque(robomas_t rb[]){
+  for(int i = 0; i < ROBOMAS_NUM; i++){
+    if(rb[i].tx_torque > MAX_TORQUE)rb->tx_torque = MAX_TORQUE;
+    if(rb[i].tx_torque < -MAX_TORQUE)rb->tx_torque = -MAX_TORQUE;
+  }
   if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&ROBOMAS_HCAN)){
     CAN_TxHeaderTypeDef TxHeader;
     uint32_t TxMailbox;
@@ -223,7 +265,7 @@ void robomas_send_torque(robomas_t rb[]){
   }
 }
 /**
-* @brief 目標値spに基づいてpid式で操作量mvを計算する．
+* @brief 目標値sp,制御量pvに基づいてpid式で操作量mvを計算し，結果をmvに格納する
 * @return 操作量を返す
   double p;   //比例ゲイン
   double i;   //積分ゲイン
@@ -260,11 +302,11 @@ void pid_reset(pid_t *pid){
 /*in main roop begin*/
 void upper_homing(){
   if(robomas_upper_r.state == ROBOMAS_IDLE && robomas_upper_deg.state == ROBOMAS_IDLE){
-    pid_reset(&robomas_upper_r.speed_pid);
-    pid_reset(&robomas_upper_r.pos_pid);
-    pid_reset(&robomas_upper_deg.speed_pid);
+    pid_reset(&robomas_upper_r.rpm_pid);
+    pid_reset(&robomas_upper_r.ang_pid);
+    pid_reset(&robomas_upper_deg.rpm_pid);
   
-    pid_reset(&robomas_upper_deg.pos_pid);
+    pid_reset(&robomas_upper_deg.ang_pid);
     
     robomas_upper_r.state = ROBOMAS_READY;
     robomas_upper_deg.state = ROBOMAS_READY;
@@ -273,24 +315,24 @@ void upper_homing(){
   if(HAL_GPIO_ReadPin(UPPER_ARM_DEG_UNDER_LIMIT_GPIO_Port, UPPER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
     robomas_upper_deg.state = ROBOMAS_IDLE;
     robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle;
-    pid_reset(&robomas_upper_deg.speed_pid);
-    pid_reset(&robomas_upper_deg.pos_pid);
+    pid_reset(&robomas_upper_deg.rpm_pid);
+    pid_reset(&robomas_upper_deg.ang_pid);
   }
     
   if(HAL_GPIO_ReadPin(UPPER_ARM_R_LIMIT_GPIO_Port, UPPER_ARM_R_LIMIT_Pin) == GPIO_PIN_SET){
     robomas_upper_r.state = ROBOMAS_IDLE;
     robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle;
-    pid_reset(&robomas_upper_r.speed_pid);
-    pid_reset(&robomas_upper_r.pos_pid);
+    pid_reset(&robomas_upper_r.rpm_pid);
+    pid_reset(&robomas_upper_r.ang_pid);
   }
 }
 
 void lower_homing(){
   if(robomas_lower_r.state == ROBOMAS_IDLE && robomas_lower_deg.state == ROBOMAS_IDLE){
-    pid_reset(&robomas_lower_r.speed_pid);
-    pid_reset(&robomas_lower_r.pos_pid);
-    pid_reset(&robomas_lower_deg.speed_pid);
-    pid_reset(&robomas_lower_deg.pos_pid);
+    pid_reset(&robomas_lower_r.rpm_pid);
+    pid_reset(&robomas_lower_r.ang_pid);
+    pid_reset(&robomas_lower_deg.rpm_pid);
+    pid_reset(&robomas_lower_deg.ang_pid);
     robomas_lower_r.state = ROBOMAS_READY;
     robomas_lower_deg.state = ROBOMAS_READY;
   }
@@ -298,20 +340,71 @@ void lower_homing(){
   if(HAL_GPIO_ReadPin(LOWER_ARM_DEG_UNDER_LIMIT_GPIO_Port, LOWER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
     robomas_lower_deg.state = ROBOMAS_IDLE;
     robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle;
-    pid_reset(&robomas_lower_deg.speed_pid);
-    pid_reset(&robomas_lower_deg.pos_pid);
+    pid_reset(&robomas_lower_deg.rpm_pid);
+    pid_reset(&robomas_lower_deg.ang_pid);
   }
     
   if(HAL_GPIO_ReadPin(LOWER_ARM_R_LIMIT_GPIO_Port, LOWER_ARM_R_LIMIT_Pin) == GPIO_PIN_SET){
     robomas_lower_r.state = ROBOMAS_IDLE;
     robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle;
-    pid_reset(&robomas_lower_r.speed_pid);
-    pid_reset(&robomas_lower_r.pos_pid);
+    pid_reset(&robomas_lower_r.rpm_pid);
+    pid_reset(&robomas_lower_r.ang_pid);
   }
 }
 
-void robomas_update(robomas_t *rb){
+/**
+* @brief ホーミングrpmを目標値svにセットする．
+* @return 正常なら引数を返す．異常ならNULL． 
+*/
+robomas_t *set_robomas_homing_rpm(robomas_t *rb){
+  if(rb == &robomas_lower_deg || rb == &robomas_upper_deg){
+    rb->rpm_pid.sv = ARM_DEG_DIRECTION * HOMING_DEG_RPM;
+  }else if(rb == &robomas_lower_r){
+    rb->rpm_pid.sv = ARM_R_DIRECTION * HOMING_LOWER_R_RPM;
+  }else if(rb == &robomas_upper_r){
+    rb->rpm_pid.sv = ARM_R_DIRECTION * HOMING_UPPER_R_RPM;
+  }else{return NULL;}
+  return rb;
+}
+/**
+* @brief 座標に対応するロボマスの角度(一周あたり8192)を座標から計算し，角度目標値svにセットする．
+* @return 正常なら引数を返す．異常ならNULL． 
+**/
+robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
+  if(rb == &robomas_lower_deg){
+    rb->ang_pid.sv = to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION;
+  }else if(rb == &robomas_lower_r){
+    rb->ang_pid.sv = to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+  }else if(rb == &robomas_upper_deg){
+    rb->ang_pid.sv = to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION;
+  }else if(rb == &robomas_upper_r){
+    rb->ang_pid.sv = to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+  }else{return NULL;}
+  return rb;
+}
 
+void robomas_update(robomas_t *rb){
+  rb->ang_pid.pv = rb->feedback.total_angle - rb->total_angle_home ;
+  rb->rpm_pid.pv = rb->feedback.rpm;
+  switch(rb->state){
+    case ROBOMAS_HOMING:
+      set_robomas_homing_rpm(rb);
+    break;
+    case ROBOMAS_IDLE:
+      rb->rpm_pid.sv = 0;
+    break;
+    case ROBOMAS_READY:
+      set_robomas_deg_from_coordinate(rb);
+      rb->rpm_pid.sv = calc_pid(&rb->ang_pid);
+    break;
+    default:
+    break;
+  }
+  if(HAL_GetTick() - rb->feedback.last_update > ROBOMAS_FEEDBACK_TIMEOUT_MS){
+    rb->tx_torque = 0;
+  }else{
+    rb->tx_torque = calc_pid(&rb->rpm_pid);
+  }
 }
 
 /*in main roop end*/
@@ -370,9 +463,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  for(int i = 0; i < ROBOMAS_NUM; i++){
+    robomas[i].state = ROBOMAS_HOMING;
+    pid_reset(&robomas[i].rpm_pid);
+    pid_reset(&robomas[i].ang_pid);
+  }
   while (1)
   {
-    /* USER CODE END WHILE */
     if(robomas_upper_r.state != ROBOMAS_READY && robomas_upper_deg.state != ROBOMAS_READY)upper_homing();
     if(robomas_lower_r.state != ROBOMAS_READY && robomas_lower_deg.state != ROBOMAS_READY)lower_homing();
 
@@ -386,6 +483,9 @@ int main(void)
       last_heartbeat = HAL_GetTick();
       stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_ROBOMAS_CONTROLLER_HEARTBEAT});
     }
+    HAL_Delay(LOOP_MS);
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
