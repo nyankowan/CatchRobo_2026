@@ -94,29 +94,37 @@ void dump_task(void* arg){
 
 void main_task(void* arg){
     mypad_t mypad[MAX_MYPAD] = {0}, prev_mypad[MAX_MYPAD] = {0};
+    #define lower_mypad mypad[0]
+    #define upper_mypad mypad[1]
+    #define lower_prev_mypad prev_mypad[0]
+    #define upper_prev_mypad prev_mypad[1]
     get_mypad(mypad);
     while(1){
         memcpy(prev_mypad,mypad,sizeof(mypad));
         get_mypad(mypad);
+
+        if(PRESSED(lower_mypad.HOME, lower_prev_mypad.HOME))lower_arm_homing();
+        if(PRESSED(upper_mypad.HOME, upper_prev_mypad.HOME))upper_arm_homing();
+        
 
         led_set_level(CONTROLLER_1_LED_GPIO, mypad[0].connected);
         led_set_level(CONTROLLER_2_LED_GPIO, mypad[1].connected);
         led_set_level(ROBOMAS_CONTROLLER_STATUS_LED_GPIO, get_connection(MICON_TYPE_ROBOMAS_CONTROLLER));
         
         lower_arm_move(
-            mypad[0].RIGHT - mypad[0].LEFT,
-            mypad[0].UP - mypad[0].DOWN,
-            PRESSED(mypad[0].Y, prev_mypad[0].Y),
-            PRESSED(mypad[0].X, prev_mypad[0].X),
-            PRESSED(mypad[0].A, prev_mypad[0].A),
-            PRESSED(mypad[0].B, prev_mypad[0].B)
+            lower_mypad.RIGHT - lower_mypad.LEFT,
+            lower_mypad.UP - lower_mypad.DOWN,
+            PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
+            PRESSED(lower_mypad.X, lower_prev_mypad.X),
+            PRESSED(lower_mypad.A, lower_prev_mypad.A),
+            PRESSED(lower_mypad.B, lower_prev_mypad.B)
         );
         send_lower_arm();
 
         upper_arm_move(
-            mypad[1].RIGHT - mypad[1].LEFT,
-            mypad[1].UP - mypad[1].DOWN,
-            mypad[1].A - mypad[1].B
+            upper_mypad.RIGHT - upper_mypad.LEFT,
+            upper_mypad.UP -    upper_mypad.DOWN,
+            upper_mypad.A -     upper_mypad.B
         );
         send_upper_arm();
 

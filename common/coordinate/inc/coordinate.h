@@ -11,7 +11,7 @@
   .x = LOWER_ARM_R_MIN,\
   .y = 0,\
 }
-#define UPPER_ARM_HOME_COORDINATE{\
+#define UPPER_ARM_HOME_COORDINATE {\
   .x = UPPER_ARM_R_MIN,\
   .y = 0,\
 }\

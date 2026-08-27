@@ -191,6 +191,9 @@ esp_err_t upper_arm_homing(){
  * CAN rx taskからcallbackされるので重い処理はしない。
  */
 static void lower_arm_homing_done_notify(const can_data_t *data){
+    direct_t larm = LOWER_ARM_HOME_COORDINATE;
+    lower_arm.x = larm.x;
+    lower_arm.y = larm.y;
     if (!lower_arm_homing_in_progress) {
         ESP_LOGW(ARM_TAG,"lower homing DONE received while not homing.");
         return;
@@ -216,6 +219,9 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
  * CAN_ID_UPPER_HOMING_DONE
  */
 static void upper_arm_homing_done_notify(const can_data_t *data){
+    direct_t uarm = UPPER_ARM_HOME_COORDINATE;
+    lower_arm.x = uarm.x;
+    lower_arm.y = uarm.y;
     if (!upper_arm_homing_in_progress) {
         ESP_LOGW(ARM_TAG, "upper homing DONE received while not homing.");
         return;
