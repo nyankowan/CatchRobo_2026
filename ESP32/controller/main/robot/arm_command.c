@@ -1,3 +1,4 @@
+#include "arm_command.h"
 #include "arm.h"
 #include "can.h"
 #include <uni.h>

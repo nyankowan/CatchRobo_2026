@@ -1,6 +1,5 @@
 #ifndef ARM_H
 #define ARM_H
-#define ARM_NUM 2
 #include "coordinate.h"
 #include <esp_err.h>
 #include <stdbool.h>

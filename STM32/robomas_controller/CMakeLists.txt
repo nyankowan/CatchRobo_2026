@@ -53,6 +53,11 @@ add_subdirectory(
     "${CMAKE_CURRENT_LIST_DIR}/../../common/coordinate"
     "${CMAKE_BINARY_DIR}/coordinate"
 )
+# ESP32 / STM32共通 アーム情報
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../../common/arm"
+    "${CMAKE_BINARY_DIR}/arm"
+)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -85,4 +90,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm_can
     can_protocol
     coordinate
+    arm
 )

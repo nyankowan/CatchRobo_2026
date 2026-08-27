@@ -93,11 +93,14 @@ Upper ArmおよびLower ArmのHomingでは，
 * Homing完了ACK
 
 の4種類のメッセージを使用する．
+ホーミング処理の中枢を担うのはrobomas_contorollerのみで，
+サーボ制御基板はHOMINGを受け取ったときのみ，サーボを初期化するだけである．
+そして，HOMIG_ACK,HOMING_DONEを返さない．
 
 基本的な通信シーケンスは以下とする．
 
 ```text
-Main Controller                     Arm Controller
+Main Controller                     Robomas Controller
       |                                   |
       | -------- HOMING ----------------> |
       | <------- HOMING_ACK ------------- |

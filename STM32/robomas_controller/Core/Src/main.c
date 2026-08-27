@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "arm.h"
 #include "can_protocol.h"
 #include "coordinate.h"
 #include "stm32f4xx_hal.h"
