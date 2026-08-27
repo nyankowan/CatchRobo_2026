@@ -22,7 +22,7 @@
 #include "can.h"
 #include "procon_data.h"
 #include "coordinate.h"
-#include "arm.h"
+#include "arm_command.h"
 #include "led.h"
 #include "micon_connection.h"
 

@@ -1,7 +1,6 @@
 if(COMMAND idf_component_register)
     # ESP-IDF
-    idf_component_register(INCLUDE_DIRS "inc"
-                            PRE_REQUIRES "coordinate")
+    idf_component_register(INCLUDE_DIRS "inc")
 
 else()
     # STM32など通常のCMake

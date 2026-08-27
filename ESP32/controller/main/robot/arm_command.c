@@ -221,8 +221,8 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
  */
 static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
-    lower_arm.x = uarm.x;
-    lower_arm.y = uarm.y;
+    upper_arm.x = uarm.x;
+    upper_arm.y = uarm.y;
     if (!upper_arm_homing_in_progress) {
         ESP_LOGW(ARM_TAG, "upper homing DONE received while not homing.");
         return;
