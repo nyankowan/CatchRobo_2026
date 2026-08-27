@@ -50,8 +50,19 @@ static TickType_t upper_arm_homing_start_tick = 0;
 // homing中は動かない
 void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle, bool right_toggle, bool expand_toggle){
     if(lower_arm_homing_in_progress)return;
-    lower_arm.x += dx;
-    lower_arm.y += dy;
+    direct_t d = {
+        .x = lower_arm.x,
+        .y = lower_arm.y, 
+    };
+    d.x += dx;
+    d.y += dy;
+    polar_t p = to_polar(d);
+    if( LOWER_ARM_R_MIN <= p.r && p.r <= LOWER_ARM_R_MIN + LOWER_ARM_R_RANGE && 
+        LOWER_ARM_DEG_MIN <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE){
+        lower_arm.x = d.x;
+        lower_arm.y = d.y;
+    }
+
     if(left_toggle)     {TOGGLE(lower_arm.left, 1);}
     if(middle_toggle)   {TOGGLE(lower_arm.middle, 1);}
     if(right_toggle)    {TOGGLE(lower_arm.right, 1);}
@@ -62,8 +73,19 @@ void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle,
 // homing中は動かない
 void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
     if (upper_arm_homing_in_progress)return;
-    upper_arm.x += dx;
-    upper_arm.y += dy;
+
+    direct_t d = {
+        .x = upper_arm.x,
+        .y = upper_arm.y, 
+    };
+    d.x += dx;
+    d.y += dy;
+    polar_t p = to_polar(d);
+    if( UPPER_ARM_R_MIN <= p.r && p.r <= UPPER_ARM_R_MIN + UPPER_ARM_R_RANGE && 
+        UPPER_ARM_DEG_MIN <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= UPPER_ARM_DEG_MIN + UPPER_ARM_DEG_RANGE){
+        upper_arm.x = d.x;
+        upper_arm.y = d.y;
+    }
     upper_arm.z += dz;
 }
 
