@@ -218,7 +218,13 @@ void command_receive(can_command_data_t *com){
   case CAN_ID_UPPER_HOMING:
     if(!robomas_upper_deg.feedback.initialized || !robomas_upper_r.feedback.initialized)return;
     if(robomas_upper_r.state == ROBOMAS_IDLE || robomas_upper_deg.state == ROBOMAS_IDLE)return;
-    if(robomas_upper_r.state == ROBOMAS_ERROR || robomas_upper_deg.state == ROBOMAS_ERROR)return;
+    if(robomas_upper_r.state == ROBOMAS_ERROR || robomas_upper_deg.state == ROBOMAS_ERROR){
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+        .id = CAN_ID_ERROR_CODE,
+        .data.error_code = CAN_ERROR_UPPER_HOMING_REJECTED,
+      });
+      return;
+    }
     //INITAIL -> HOMING or READY -> HOMING
     pid_reset(&robomas_upper_r.rpm_pid);
     pid_reset(&robomas_upper_deg.rpm_pid);
@@ -229,7 +235,13 @@ void command_receive(can_command_data_t *com){
   case CAN_ID_LOWER_HOMING:
     if(!robomas_lower_deg.feedback.initialized || !robomas_lower_r.feedback.initialized)return;
     if(robomas_lower_r.state == ROBOMAS_IDLE || robomas_lower_deg.state == ROBOMAS_IDLE)return;
-    if(robomas_lower_r.state == ROBOMAS_ERROR || robomas_lower_deg.state == ROBOMAS_ERROR)return;
+    if(robomas_lower_r.state == ROBOMAS_ERROR || robomas_lower_deg.state == ROBOMAS_ERROR){
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+        .id = CAN_ID_ERROR_CODE,
+        .data.error_code = CAN_ERROR_LOWER_HOMING_REJECTED,
+      });
+      return;
+    }
     //INITAIL -> HOMING or READY -> HOMING
     pid_reset(&robomas_lower_r.rpm_pid);
     pid_reset(&robomas_lower_deg.rpm_pid);
@@ -334,9 +346,15 @@ void pid_reset(pid_t *pid){
 void upper_homing(){
   if(robomas_upper_r.state == ROBOMAS_READY && robomas_upper_deg.state == ROBOMAS_READY)return;
 
-  if(HAL_GetTick() - upper_homing_start_time > HOMING_UPPER_ARM_TIMEOUT_MS){
+  if((robomas_upper_deg.state != ROBOMAS_INITIAL || robomas_upper_r.state != ROBOMAS_INITIAL) &&
+     HAL_GetTick() - upper_homing_start_time > HOMING_UPPER_ARM_TIMEOUT_MS){
     robomas_upper_deg.state = ROBOMAS_INITIAL;
     robomas_upper_r.state = ROBOMAS_INITIAL;
+
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_ERROR_CODE,
+      .data.error_code = CAN_ERROR_UPPER_HOMING_TIMEOUT,
+    });
   }
 
   if(robomas_upper_deg.state == ROBOMAS_HOMING && UPPER_ARM_DEG_UNDER_LIMIT_ON){
@@ -365,9 +383,15 @@ void upper_homing(){
 
 void lower_homing(){
   if(robomas_lower_r.state == ROBOMAS_READY && robomas_lower_deg.state == ROBOMAS_READY)return;
-  if(HAL_GetTick() - lower_homing_start_time > HOMING_LOWER_ARM_TIMEOUT_MS){
+  if((robomas_lower_deg.state != ROBOMAS_INITIAL || robomas_lower_r.state != ROBOMAS_INITIAL) &&
+     HAL_GetTick() - lower_homing_start_time > HOMING_LOWER_ARM_TIMEOUT_MS){
     robomas_lower_deg.state = ROBOMAS_INITIAL;
     robomas_lower_r.state = ROBOMAS_INITIAL;
+
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_ERROR_CODE,
+      .data.error_code = CAN_ERROR_LOWER_HOMING_TIMEOUT,
+    });
   }
 
   if(robomas_lower_deg.state == ROBOMAS_HOMING && LOWER_ARM_DEG_UNDER_LIMIT_ON){
@@ -437,9 +461,27 @@ robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
   return rb;
 }
 
+/**
+* @brief フィードバック途絶によりROBOMAS_ERRORへ遷移した軸を特定するエラーコードを返す．
+*/
+can_error_t get_lost_control_error_code(robomas_t *rb){
+  if(rb == &robomas_lower_r)        return CAN_ERROR_LOWER_R_LOST_CONTROL;
+  else if(rb == &robomas_lower_deg) return CAN_ERROR_LOWER_DEG_LOST_CONTROL;
+  else if(rb == &robomas_upper_r)   return CAN_ERROR_UPPER_R_LOST_CONTROL;
+  else                              return CAN_ERROR_UPPER_DEG_LOST_CONTROL;
+}
+
 void robomas_update(robomas_t *rb){
+  robomas_state_t prev_state = rb->state;
+
   if(HAL_GetTick() - rb->feedback.last_update > ROBOMAS_FEEDBACK_TIMEOUT_MS){
     rb->state = ROBOMAS_ERROR;
+    if(prev_state != ROBOMAS_ERROR){
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+        .id = CAN_ID_ERROR_CODE,
+        .data.error_code = get_lost_control_error_code(rb),
+      });
+    }
   }else if(rb->state == ROBOMAS_ERROR){
     rb->state = ROBOMAS_INITIAL;
   }

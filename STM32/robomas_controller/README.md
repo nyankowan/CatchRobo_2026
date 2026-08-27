@@ -20,10 +20,11 @@ Main Controllerからホーミング指令を受け取り，ホーミング処�
 ### ROBOMASTER_STATE
 ```C
 typedef enum{
-  ROBOMAS_INITIAL,  // 初回起動時状態
-  ROBOMAS_HOMING,   // 速度制御によって，リミットスイッチ位置まで回転する
-  ROBOMAS_IDLE,     // ホーミング終了による他のホーミングを待機
-  ROBOMAS_READY,    // ユーザが制御可能な状態
+  ROBOMAS_INITIAL,
+  ROBOMAS_HOMING,
+  ROBOMAS_IDLE,
+  ROBOMAS_READY,
+  ROBOMAS_ERROR,
 }robomas_state_t;
 ```
 | Value             |  explanation |
@@ -32,3 +33,4 @@ typedef enum{
 |`ROBOMAS_HOMING`   | ホーミング処理中の状態．リミットスイッチからの信号で `ROBOMAS_IDLE` に遷移する．|
 |`ROBOMAS_IDLE`     | ホーミング処理を終了し，もう片方のホーミングの待機中．両ロボマスがこの状態になると`ROBOMAS_IDLE`に遷移する．|
 |`ROBOMAS_READY`    | Main Controllerからの座標指令をもとに制御を行える状態．ホーミング指令により `ROBOMAS_HOMING` に遷移する．|
+|`ROBOMAS_ERROR`    | ロボマスとの通信が切れている状態．受信できたら`ROBOMAS_INITIAL`に遷移する． |

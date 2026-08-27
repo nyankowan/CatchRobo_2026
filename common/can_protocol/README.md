@@ -340,9 +340,16 @@ Error Codeは `can_error.h` に定義する．
 
 現在定義されているError Codeは以下の通り．
 
-|  Value | Name                             | Description              |
-| -----: | -------------------------------- | ------------------------ |
-| `0x01` | `CAN_ERROR_ROBOMAS_LOST_CONTROL` | Robomas Controllerとの通信喪失 |
+|  Value | Name                               | Description                                             |
+| -----: | ----------------------------------- | -------------------------------------------------------- |
+| `0x01` | `CAN_ERROR_LOWER_R_LOST_CONTROL`    | 下アームRロボマスからのフィードバックが途絶えた           |
+| `0x02` | `CAN_ERROR_LOWER_DEG_LOST_CONTROL`  | 下アームDEGロボマスからのフィードバックが途絶えた         |
+| `0x03` | `CAN_ERROR_UPPER_R_LOST_CONTROL`    | 上アームRロボマスからのフィードバックが途絶えた           |
+| `0x04` | `CAN_ERROR_UPPER_DEG_LOST_CONTROL`  | 上アームDEGロボマスからのフィードバックが途絶えた         |
+| `0x10` | `CAN_ERROR_LOWER_HOMING_TIMEOUT`    | 下アームのホーミングが規定時間内に完了しなかった          |
+| `0x11` | `CAN_ERROR_UPPER_HOMING_TIMEOUT`    | 上アームのホーミングが規定時間内に完了しなかった          |
+| `0x20` | `CAN_ERROR_LOWER_HOMING_REJECTED`   | 下アームがROBOMAS_ERROR中のためホーミング要求を無視した   |
+| `0x21` | `CAN_ERROR_UPPER_HOMING_REJECTED`   | 上アームがROBOMAS_ERROR中のためホーミング要求を無視した   |
 
 新しいError Codeを追加する場合は，既存の値と重複しない値を `can_error.h` に追加する．
 

@@ -22,6 +22,7 @@
 
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
+static void error_code_notify(const can_data_t *data);
 
 /* ToDo 
 static void lower_arm_homing_ack_notify(const can_data_t *data);
@@ -137,6 +138,11 @@ esp_err_t arms_init(){
     can_register_rx_callback(
         CAN_ID_UPPER_HOMING_DONE,
         upper_arm_homing_done_notify
+    );
+
+    can_register_rx_callback(
+        CAN_ID_ERROR_CODE,
+        error_code_notify
     );
 
     arms_init_already_done = true;
@@ -259,6 +265,50 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
     ESP_LOGI(ARM_TAG, "upper arm homing done. sequence=%u", upper_arm_homing_sequence);
 
     upper_arm_homing_sequence++;
+}
+
+
+/*
+ * STM32(robomas_controller) -> ESP32
+ * CAN_ID_ERROR_CODE
+ *
+ * ロボマス制御側で検知した異常(フィードバック途絶・ホーミングタイムアウト等)を通知される。
+ * CAN rx taskからcallbackされるので重い処理はしない。
+ */
+static void error_code_notify(const can_data_t *data){
+    switch(data->error_code){
+    case CAN_ERROR_LOWER_R_LOST_CONTROL:
+        ESP_LOGE(ARM_TAG, "[ERROR] lower arm R robomas lost feedback.");
+        break;
+    case CAN_ERROR_LOWER_DEG_LOST_CONTROL:
+        ESP_LOGE(ARM_TAG, "[ERROR] lower arm DEG robomas lost feedback.");
+        break;
+    case CAN_ERROR_UPPER_R_LOST_CONTROL:
+        ESP_LOGE(ARM_TAG, "[ERROR] upper arm R robomas lost feedback.");
+        break;
+    case CAN_ERROR_UPPER_DEG_LOST_CONTROL:
+        ESP_LOGE(ARM_TAG, "[ERROR] upper arm DEG robomas lost feedback.");
+        break;
+    case CAN_ERROR_LOWER_HOMING_TIMEOUT:
+        ESP_LOGE(ARM_TAG, "[ERROR] lower arm homing timed out. re-homing required.");
+        lower_arm_homing_in_progress = false;
+        break;
+    case CAN_ERROR_UPPER_HOMING_TIMEOUT:
+        ESP_LOGE(ARM_TAG, "[ERROR] upper arm homing timed out. re-homing required.");
+        upper_arm_homing_in_progress = false;
+        break;
+    case CAN_ERROR_LOWER_HOMING_REJECTED:
+        ESP_LOGE(ARM_TAG, "[ERROR] lower arm homing rejected (robomas in ERROR state).");
+        lower_arm_homing_in_progress = false;
+        break;
+    case CAN_ERROR_UPPER_HOMING_REJECTED:
+        ESP_LOGE(ARM_TAG, "[ERROR] upper arm homing rejected (robomas in ERROR state).");
+        upper_arm_homing_in_progress = false;
+        break;
+    default:
+        ESP_LOGE(ARM_TAG, "[ERROR] unknown error_code=0x%02x", data->error_code);
+        break;
+    }
 }
 
 
