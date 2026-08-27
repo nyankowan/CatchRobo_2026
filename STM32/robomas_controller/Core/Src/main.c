@@ -184,6 +184,7 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void command_receive(can_command_data_t *com);
 void robomas_receive(uint8_t robomas_id, uint8_t *data);
+void pid_reset(pid_t *pid);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -221,11 +222,21 @@ void command_receive(can_command_data_t *com){
 
   break;
   case CAN_ID_UPPER_HOMING:
+    if(!robomas_upper_deg.feedback.initialized || !robomas_upper_r.feedback.initialized)return;
+    if(robomas_upper_r.state == ROBOMAS_IDLE || robomas_upper_deg.state == ROBOMAS_IDLE )return;
+    //INITAIL -> HOMING or READY -> HOMING
+    pid_reset(&robomas_upper_r.rpm_pid);
+    pid_reset(&robomas_upper_deg.rpm_pid);
     robomas_upper_r.state = ROBOMAS_HOMING;
     robomas_upper_deg.state = ROBOMAS_HOMING;
 
   break;
   case CAN_ID_LOWER_HOMING:
+    if(!robomas_lower_deg.feedback.initialized || !robomas_lower_r.feedback.initialized)return;
+    if(robomas_lower_r.state == ROBOMAS_IDLE || robomas_lower_deg.state == ROBOMAS_IDLE )return;
+    //INITAIL -> HOMING or READY -> HOMING
+    pid_reset(&robomas_lower_r.rpm_pid);
+    pid_reset(&robomas_lower_deg.rpm_pid);
     robomas_lower_r.state = ROBOMAS_HOMING;
     robomas_lower_deg.state = ROBOMAS_HOMING;
 
@@ -326,10 +337,21 @@ void pid_reset(pid_t *pid){
 /*in main roop begin*/
 void upper_homing(){
   if(robomas_upper_r.state == ROBOMAS_READY && robomas_upper_deg.state == ROBOMAS_READY)return;
-  if(robomas_upper_r.state == ROBOMAS_IDLE && robomas_upper_deg.state == ROBOMAS_IDLE){
-    pid_reset(&robomas_upper_r.rpm_pid);
-    pid_reset(&robomas_upper_r.ang_pid);
+
+  if(robomas_upper_deg.state == ROBOMAS_HOMING && UPPER_ARM_DEG_UNDER_LIMIT_ON){
+    robomas_upper_deg.state = ROBOMAS_IDLE;
+    robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle;
     pid_reset(&robomas_upper_deg.rpm_pid);
+  }
+    
+  if(robomas_upper_r.state == ROBOMAS_HOMING && UPPER_ARM_R_LIMIT_ON){
+    robomas_upper_r.state = ROBOMAS_IDLE;
+    robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle - ARM_R_ROBOMAS_DIRECTION * UPPER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    pid_reset(&robomas_upper_r.rpm_pid);
+  }
+
+  if(robomas_upper_r.state == ROBOMAS_IDLE && robomas_upper_deg.state == ROBOMAS_IDLE){
+    pid_reset(&robomas_upper_r.ang_pid);
     pid_reset(&robomas_upper_deg.ang_pid);
     
     robomas_upper_r.state = ROBOMAS_READY;
@@ -338,48 +360,31 @@ void upper_homing(){
     stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_UPPER_HOMING_DONE});
     return;
   }
-
-  if(UPPER_ARM_DEG_UNDER_LIMIT_ON){
-    robomas_upper_deg.state = ROBOMAS_IDLE;
-    robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle;
-    pid_reset(&robomas_upper_deg.rpm_pid);
-    pid_reset(&robomas_upper_deg.ang_pid);
-  }
-    
-  if(UPPER_ARM_R_LIMIT_ON){
-    robomas_upper_r.state = ROBOMAS_IDLE;
-    robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle - ARM_R_ROBOMAS_DIRECTION * UPPER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
-    pid_reset(&robomas_upper_r.rpm_pid);
-    pid_reset(&robomas_upper_r.ang_pid);
-  }
 }
 
 void lower_homing(){
   if(robomas_lower_r.state == ROBOMAS_READY && robomas_lower_deg.state == ROBOMAS_READY)return;
-  if(robomas_lower_r.state == ROBOMAS_IDLE && robomas_lower_deg.state == ROBOMAS_IDLE){
-    pid_reset(&robomas_lower_r.rpm_pid);
-    pid_reset(&robomas_lower_r.ang_pid);
+
+  if(robomas_lower_deg.state == ROBOMAS_HOMING && LOWER_ARM_DEG_UNDER_LIMIT_ON){
+    robomas_lower_deg.state = ROBOMAS_IDLE;
+    robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle;
     pid_reset(&robomas_lower_deg.rpm_pid);
+  }
+    
+  if(robomas_lower_r.state == ROBOMAS_HOMING && LOWER_ARM_R_LIMIT_ON){
+    robomas_lower_r.state = ROBOMAS_IDLE;
+    robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle  - ARM_R_ROBOMAS_DIRECTION * LOWER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    pid_reset(&robomas_lower_r.rpm_pid);
+  }
+
+  if(robomas_lower_r.state == ROBOMAS_IDLE && robomas_lower_deg.state == ROBOMAS_IDLE){
+    pid_reset(&robomas_lower_r.ang_pid);
     pid_reset(&robomas_lower_deg.ang_pid);
     
     robomas_lower_r.state = ROBOMAS_READY;
     robomas_lower_deg.state = ROBOMAS_READY;
     stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_LOWER_HOMING_DONE});
     return;
-  }
-
-  if(LOWER_ARM_DEG_UNDER_LIMIT_ON){
-    robomas_lower_deg.state = ROBOMAS_IDLE;
-    robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle;
-    pid_reset(&robomas_lower_deg.rpm_pid);
-    pid_reset(&robomas_lower_deg.ang_pid);
-  }
-    
-  if(LOWER_ARM_R_LIMIT_ON){
-    robomas_lower_r.state = ROBOMAS_IDLE;
-    robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle  - ARM_R_ROBOMAS_DIRECTION * LOWER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
-    pid_reset(&robomas_lower_r.rpm_pid);
-    pid_reset(&robomas_lower_r.ang_pid);
   }
 }
 
