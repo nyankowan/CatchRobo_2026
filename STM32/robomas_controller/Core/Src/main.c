@@ -440,16 +440,10 @@ robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
 void robomas_update(robomas_t *rb){
   if(HAL_GetTick() - rb->feedback.last_update > ROBOMAS_FEEDBACK_TIMEOUT_MS){
     rb->state = ROBOMAS_ERROR;
-    pid_reset(&rb->ang_pid);
-    pid_reset(&rb->rpm_pid);
-    rb->tx_torque = 0;
-    return;
   }else if(rb->state == ROBOMAS_ERROR){
     rb->state = ROBOMAS_INITIAL;
   }
 
-  rb->ang_pid.pv = rb->feedback.total_angle- rb->total_angle_home;
-  rb->rpm_pid.pv = rb->feedback.rpm;
   switch(rb->state){
     case ROBOMAS_HOMING:
       set_robomas_homing_rpm(rb);
@@ -461,6 +455,7 @@ void robomas_update(robomas_t *rb){
 
     case ROBOMAS_READY:
       set_robomas_deg_from_coordinate(rb);
+      rb->ang_pid.pv = rb->feedback.total_angle- rb->total_angle_home;
       rb->rpm_pid.sv = calc_pid(&rb->ang_pid);
       break;
 
@@ -471,6 +466,7 @@ void robomas_update(robomas_t *rb){
       return;
 
   }
+  rb->rpm_pid.pv = rb->feedback.rpm;
   rb->tx_torque = calc_pid(&rb->rpm_pid);
 }
 
