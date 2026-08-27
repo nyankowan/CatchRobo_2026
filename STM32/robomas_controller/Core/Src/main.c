@@ -101,13 +101,12 @@ typedef struct{
 #define ROBOMAS_FEEDBACK_TIMEOUT_MS 100
 
 #define ROBOMAS_NUM 4
-#define ARM_NUM 2
+
 #define MAX_TORQUE 32000 //ロボマスに送る最大電流値
 #define R_ROBOMAS_DIAMETER 30.0 //アーム長ロボマスにつくギアの直径(mm)
-#define LOWER_R_MIN 200.0//ToDo: アーム長を一番短くしたときのR(mm)を測る
+
 #define POLAR_RATIO (8.0/3.0) //アーム軸/モーター軸　直径比
-#define UPPER_ARM_R_RANGE 700.0 //ToDo: 上側アームのアーム長可動域(mm)
-#define LOWER_ARM_R_RANGE 830.0 //ToDo: 下側アームのアーム長可動域(mm)
+
 #define ARM_DEG_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
 #define ARM_R_DIRECTION -1 //アームが伸びる方向が正でモーター右ねじ正
 
@@ -117,10 +116,7 @@ typedef struct{
 
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
-#define ARM_HOME_COORDINATE {\
-  .x = LOWER_R_MIN,\
-  .y = 0,\
-}
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -310,6 +306,8 @@ void upper_homing(){
     
     robomas_upper_r.state = ROBOMAS_READY;
     robomas_upper_deg.state = ROBOMAS_READY;
+
+    stm_can_send(&COMMAND_HCAN, const (can_command_data_t){.id = CAN_ID_UPPER_HOMING_DONE});
   }
 
   if(HAL_GPIO_ReadPin(UPPER_ARM_DEG_UNDER_LIMIT_GPIO_Port, UPPER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
@@ -333,8 +331,10 @@ void lower_homing(){
     pid_reset(&robomas_lower_r.ang_pid);
     pid_reset(&robomas_lower_deg.rpm_pid);
     pid_reset(&robomas_lower_deg.ang_pid);
+    
     robomas_lower_r.state = ROBOMAS_READY;
     robomas_lower_deg.state = ROBOMAS_READY;
+    stm_can_send(&COMMAND_HCAN, const (can_command_data_t){.id = CAN_ID_LOWER_HOMING_DONE});
   }
 
   if(HAL_GPIO_ReadPin(LOWER_ARM_DEG_UNDER_LIMIT_GPIO_Port, LOWER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_SET){
