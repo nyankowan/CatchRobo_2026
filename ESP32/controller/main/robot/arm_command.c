@@ -12,8 +12,6 @@
 
 #define ARM_TAG "ARM"
 
-#define HOMING_TIMEOUT_MS 10000
-
 #define TOGGLE(button, num) \
     if ((button) == 0) {    \
         (button) = (num);   \
@@ -275,12 +273,10 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
  */
 void arms_update(){
     TickType_t now = xTaskGetTickCount();
-    TickType_t timeout = pdMS_TO_TICKS(HOMING_TIMEOUT_MS);
-
 
     /* Lower Arm */
     if (lower_arm_homing_in_progress) {
-        if ((now - lower_arm_homing_start_tick) >= timeout) {
+        if ((now - lower_arm_homing_start_tick) >= pdMS_TO_TICKS(HOMING_LOWER_ARM_TIMEOUT_MS)) {
             ESP_LOGE(ARM_TAG, "lower arm homing timeout. sequence=%u", lower_arm_homing_sequence);
 
             lower_arm_homing_in_progress = false;
@@ -289,7 +285,7 @@ void arms_update(){
 
     /* Upper Arm */
     if (upper_arm_homing_in_progress) {
-        if ((now - upper_arm_homing_start_tick) >= timeout) {
+        if ((now - upper_arm_homing_start_tick) >= pdMS_TO_TICKS(HOMING_UPPER_ARM_TIMEOUT_MS)) {
             ESP_LOGE(ARM_TAG, "upper arm homing timeout. sequence=%u", upper_arm_homing_sequence);
 
             upper_arm_homing_in_progress = false;
