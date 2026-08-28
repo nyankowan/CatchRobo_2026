@@ -113,8 +113,21 @@ uint32_t lower_homing_done_sent_time;
 uint8_t upper_homing_done_retry_count;
 uint8_t lower_homing_done_retry_count;
 
+// 一度のホーミング試行につき，タイムアウトのCAN_ID_ERROR_CODEは1回しか送らない
+bool upper_homing_timeout_notified;
+bool lower_homing_timeout_notified;
+
 #define HOMING_DONE_ACK_RETRY_MS 200   //この間隔でHOMING_DONEを再送する
 #define HOMING_DONE_ACK_MAX_RETRY 5    //再送を諦めるまでの回数
+
+// Status_LED点滅パターン用
+// lowerがREADYでない:+1 upperがREADYでない:+2 (両方でないなら3回点滅) 両方READYなら常時点灯
+#define STATUS_LED_BLINK_ON_MS   150
+#define STATUS_LED_BLINK_OFF_MS  150
+#define STATUS_LED_BLINK_PAUSE_MS 700
+uint8_t status_led_blink_index; //現在の点滅サイクルで何回点滅したか
+bool status_led_on;
+uint32_t status_led_phase_start;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -179,10 +192,10 @@ robomas_t robomas[ROBOMAS_NUM] = {
     .p = 10, .i = 0, .d = 0,
   }},
 };
-#define robomas_lower_r robomas[0]
-#define robomas_lower_deg robomas[1]
-#define robomas_upper_r robomas[2]
-#define robomas_upper_deg robomas[3]
+#define robomas_lower_deg robomas[0]
+#define robomas_lower_r robomas[1]
+#define robomas_upper_deg robomas[2]
+#define robomas_upper_r robomas[3]
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -251,6 +264,7 @@ void command_receive(can_command_data_t *com){
     //INITAIL -> HOMING or READY -> HOMING
     upper_homing_sequence = com->data.homing_sequence;
     upper_homing_done_ack_pending = false; // 前回分の再送待ちが残っていたら破棄
+    upper_homing_timeout_notified = false;
     pid_reset(&robomas_upper_r.rpm_pid);
     pid_reset(&robomas_upper_deg.rpm_pid);
     robomas_upper_r.state = ROBOMAS_HOMING;
@@ -284,6 +298,7 @@ void command_receive(can_command_data_t *com){
     //INITAIL -> HOMING or READY -> HOMING
     lower_homing_sequence = com->data.homing_sequence;
     lower_homing_done_ack_pending = false; // 前回分の再送待ちが残っていたら破棄
+    lower_homing_timeout_notified = false;
     pid_reset(&robomas_lower_r.rpm_pid);
     pid_reset(&robomas_lower_deg.rpm_pid);
     robomas_lower_r.state = ROBOMAS_HOMING;
@@ -417,10 +432,15 @@ void upper_homing(){
 
   if(robomas_upper_r.state == ROBOMAS_READY && robomas_upper_deg.state == ROBOMAS_READY)return;
 
-  if((robomas_upper_deg.state != ROBOMAS_INITIAL || robomas_upper_r.state != ROBOMAS_INITIAL) &&
+  if(!upper_homing_timeout_notified &&
+     (robomas_upper_deg.state == ROBOMAS_HOMING || robomas_upper_deg.state == ROBOMAS_IDLE ||
+      robomas_upper_r.state   == ROBOMAS_HOMING || robomas_upper_r.state   == ROBOMAS_IDLE) &&
      HAL_GetTick() - upper_homing_start_time > HOMING_UPPER_ARM_TIMEOUT_MS){
-    robomas_upper_deg.state = ROBOMAS_INITIAL;
-    robomas_upper_r.state = ROBOMAS_INITIAL;
+    // ROBOMAS_ERROR中の軸はrobomas_update()が管理するのでここでは触らない
+    if(robomas_upper_deg.state != ROBOMAS_ERROR)robomas_upper_deg.state = ROBOMAS_INITIAL;
+    if(robomas_upper_r.state   != ROBOMAS_ERROR)robomas_upper_r.state   = ROBOMAS_INITIAL;
+
+    upper_homing_timeout_notified = true;
 
     stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
       .id = CAN_ID_ERROR_CODE,
@@ -475,10 +495,15 @@ void lower_homing(){
   }
 
   if(robomas_lower_r.state == ROBOMAS_READY && robomas_lower_deg.state == ROBOMAS_READY)return;
-  if((robomas_lower_deg.state != ROBOMAS_INITIAL || robomas_lower_r.state != ROBOMAS_INITIAL) &&
+  if(!lower_homing_timeout_notified &&
+     (robomas_lower_deg.state == ROBOMAS_HOMING || robomas_lower_deg.state == ROBOMAS_IDLE ||
+      robomas_lower_r.state   == ROBOMAS_HOMING || robomas_lower_r.state   == ROBOMAS_IDLE) &&
      HAL_GetTick() - lower_homing_start_time > HOMING_LOWER_ARM_TIMEOUT_MS){
-    robomas_lower_deg.state = ROBOMAS_INITIAL;
-    robomas_lower_r.state = ROBOMAS_INITIAL;
+    // ROBOMAS_ERROR中の軸はrobomas_update()が管理するのでここでは触らない
+    if(robomas_lower_deg.state != ROBOMAS_ERROR)robomas_lower_deg.state = ROBOMAS_INITIAL;
+    if(robomas_lower_r.state   != ROBOMAS_ERROR)robomas_lower_r.state   = ROBOMAS_INITIAL;
+
+    lower_homing_timeout_notified = true;
 
     stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
       .id = CAN_ID_ERROR_CODE,
@@ -611,6 +636,50 @@ void robomas_update(robomas_t *rb){
   rb->tx_torque = calc_pid(&rb->rpm_pid);
 }
 
+/**
+* @brief Status_LEDの点滅を管理する．
+*        lower/upperそれぞれがREADY(r軸・deg軸とも)でなければ「未ホーミング」とみなす．
+*        lowerのみ未ホーミング:1回点滅 upperのみ:2回点滅 両方:3回点滅 両方READY:常時点灯
+*        周期的(mainループ毎)に呼び出すこと．
+*/
+void status_led_update(){
+  bool lower_ready = (robomas_lower_r.state == ROBOMAS_READY && robomas_lower_deg.state == ROBOMAS_READY);
+  bool upper_ready = (robomas_upper_r.state == ROBOMAS_READY && robomas_upper_deg.state == ROBOMAS_READY);
+
+  if(lower_ready && upper_ready){
+    HAL_GPIO_WritePin(Status_LED_GPIO_Port, Status_LED_Pin, GPIO_PIN_SET);
+    status_led_blink_index = 0;
+    status_led_on = false;
+    status_led_phase_start = HAL_GetTick();
+    return;
+  }
+
+  uint8_t blink_count = (lower_ready ? 0 : 1) + (upper_ready ? 0 : 2);
+
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - status_led_phase_start;
+
+  if(status_led_on){
+    if(elapsed >= STATUS_LED_BLINK_ON_MS){
+      HAL_GPIO_WritePin(Status_LED_GPIO_Port, Status_LED_Pin, GPIO_PIN_RESET);
+      status_led_on = false;
+      status_led_phase_start = now;
+      status_led_blink_index++;
+    }
+  }else{
+    bool cycle_done = (status_led_blink_index >= blink_count);
+    uint32_t off_duration = cycle_done ? STATUS_LED_BLINK_PAUSE_MS : STATUS_LED_BLINK_OFF_MS;
+
+    if(elapsed >= off_duration){
+      if(cycle_done)status_led_blink_index = 0; //一巡したので最初から
+
+      HAL_GPIO_WritePin(Status_LED_GPIO_Port, Status_LED_Pin, GPIO_PIN_SET);
+      status_led_on = true;
+      status_led_phase_start = now;
+    }
+  }
+}
+
 /*in main roop end*/
 
 
@@ -686,6 +755,7 @@ int main(void)
     }
 
     robomas_send_torque(robomas);
+    status_led_update();
     
     if(HAL_GetTick() - last_heartbeat > HEARTBEAT_MS){
       last_heartbeat = HAL_GetTick();
