@@ -101,6 +101,20 @@ typedef struct{
 
 uint32_t upper_homing_start_time;
 uint32_t lower_homing_start_time;
+
+//(HOMING -> HOMING_ACK -> ... -> HOMING_DONE -> HOMING_DONE_ACK)
+can_sequence_t upper_homing_sequence;
+can_sequence_t lower_homing_sequence;
+
+bool upper_homing_done_ack_pending; // HOMING_DONEを送信し，HOMING_DONE_ACK待ちかどうか
+bool lower_homing_done_ack_pending;
+uint32_t upper_homing_done_sent_time;
+uint32_t lower_homing_done_sent_time;
+uint8_t upper_homing_done_retry_count;
+uint8_t lower_homing_done_retry_count;
+
+#define HOMING_DONE_ACK_RETRY_MS 200   //この間隔でHOMING_DONEを再送する
+#define HOMING_DONE_ACK_MAX_RETRY 5    //再送を諦めるまでの回数
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -226,11 +240,18 @@ void command_receive(can_command_data_t *com){
       return;
     }
     //INITAIL -> HOMING or READY -> HOMING
+    upper_homing_sequence = com->data.homing_sequence;
+    upper_homing_done_ack_pending = false; // 前回分の再送待ちが残っていたら破棄
     pid_reset(&robomas_upper_r.rpm_pid);
     pid_reset(&robomas_upper_deg.rpm_pid);
     robomas_upper_r.state = ROBOMAS_HOMING;
     robomas_upper_deg.state = ROBOMAS_HOMING;
     upper_homing_start_time = HAL_GetTick();
+
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_UPPER_HOMING_ACK,
+      .data.homing_sequence = upper_homing_sequence,
+    });
     break;
   case CAN_ID_LOWER_HOMING:
     if(!robomas_lower_deg.feedback.initialized || !robomas_lower_r.feedback.initialized)return;
@@ -243,11 +264,28 @@ void command_receive(can_command_data_t *com){
       return;
     }
     //INITAIL -> HOMING or READY -> HOMING
+    lower_homing_sequence = com->data.homing_sequence;
+    lower_homing_done_ack_pending = false; // 前回分の再送待ちが残っていたら破棄
     pid_reset(&robomas_lower_r.rpm_pid);
     pid_reset(&robomas_lower_deg.rpm_pid);
     robomas_lower_r.state = ROBOMAS_HOMING;
     robomas_lower_deg.state = ROBOMAS_HOMING;
     lower_homing_start_time = HAL_GetTick();
+
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_LOWER_HOMING_ACK,
+      .data.homing_sequence = lower_homing_sequence,
+    });
+    break;
+  case CAN_ID_UPPER_HOMING_DONE_ACK:
+    if(com->data.homing_sequence == upper_homing_sequence){
+      upper_homing_done_ack_pending = false;
+    }
+    break;
+  case CAN_ID_LOWER_HOMING_DONE_ACK:
+    if(com->data.homing_sequence == lower_homing_sequence){
+      lower_homing_done_ack_pending = false;
+    }
     break;
   default:
     break;
@@ -344,6 +382,21 @@ void pid_reset(pid_t *pid){
 
 /*in main roop begin*/
 void upper_homing(){
+  // HOMING_DONEを送信済みでHOMING_DONE_ACK待ちの場合，一定時間ごとに再送する
+  if(upper_homing_done_ack_pending &&
+     HAL_GetTick() - upper_homing_done_sent_time > HOMING_DONE_ACK_RETRY_MS){
+    if(upper_homing_done_retry_count < HOMING_DONE_ACK_MAX_RETRY){
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+        .id = CAN_ID_UPPER_HOMING_DONE,
+        .data.homing_sequence = upper_homing_sequence,
+      });
+      upper_homing_done_sent_time = HAL_GetTick();
+      upper_homing_done_retry_count++;
+    }else{
+      upper_homing_done_ack_pending = false; //諦める
+    }
+  }
+
   if(robomas_upper_r.state == ROBOMAS_READY && robomas_upper_deg.state == ROBOMAS_READY)return;
 
   if((robomas_upper_deg.state != ROBOMAS_INITIAL || robomas_upper_r.state != ROBOMAS_INITIAL) &&
@@ -376,12 +429,33 @@ void upper_homing(){
     robomas_upper_r.state = ROBOMAS_READY;
     robomas_upper_deg.state = ROBOMAS_READY;
 
-    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_UPPER_HOMING_DONE});
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_UPPER_HOMING_DONE,
+      .data.homing_sequence = upper_homing_sequence,
+    });
+    upper_homing_done_ack_pending = true;
+    upper_homing_done_sent_time = HAL_GetTick();
+    upper_homing_done_retry_count = 0;
     return;
   }
 }
 
 void lower_homing(){
+  // HOMING_DONEを送信済みでHOMING_DONE_ACK待ちの場合，一定時間ごとに再送する
+  if(lower_homing_done_ack_pending &&
+     HAL_GetTick() - lower_homing_done_sent_time > HOMING_DONE_ACK_RETRY_MS){
+    if(lower_homing_done_retry_count < HOMING_DONE_ACK_MAX_RETRY){
+      stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+        .id = CAN_ID_LOWER_HOMING_DONE,
+        .data.homing_sequence = lower_homing_sequence,
+      });
+      lower_homing_done_sent_time = HAL_GetTick();
+      lower_homing_done_retry_count++;
+    }else{
+      lower_homing_done_ack_pending = false; //諦める
+    }
+  }
+
   if(robomas_lower_r.state == ROBOMAS_READY && robomas_lower_deg.state == ROBOMAS_READY)return;
   if((robomas_lower_deg.state != ROBOMAS_INITIAL || robomas_lower_r.state != ROBOMAS_INITIAL) &&
      HAL_GetTick() - lower_homing_start_time > HOMING_LOWER_ARM_TIMEOUT_MS){
@@ -412,7 +486,14 @@ void lower_homing(){
     
     robomas_lower_r.state = ROBOMAS_READY;
     robomas_lower_deg.state = ROBOMAS_READY;
-    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){.id = CAN_ID_LOWER_HOMING_DONE});
+
+    stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+      .id = CAN_ID_LOWER_HOMING_DONE,
+      .data.homing_sequence = lower_homing_sequence,
+    });
+    lower_homing_done_ack_pending = true;
+    lower_homing_done_sent_time = HAL_GetTick();
+    lower_homing_done_retry_count = 0;
     return;
   }
 }

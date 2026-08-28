@@ -23,18 +23,15 @@
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
 static void error_code_notify(const can_data_t *data);
-
-/* ToDo 
 static void lower_arm_homing_ack_notify(const can_data_t *data);
 static void upper_arm_homing_ack_notify(const can_data_t *data);
-*/
 
 
 static lower_arm_t lower_arm = {0};
 static upper_arm_t upper_arm = {0};
 
-static uint16_t upper_arm_homing_sequence = 0;
-static uint16_t lower_arm_homing_sequence = 0;
+static can_sequence_t upper_arm_homing_sequence = 0;
+static can_sequence_t lower_arm_homing_sequence = 0;
 
 static bool arms_init_already_done = false;
 
@@ -124,11 +121,22 @@ esp_err_t send_upper_arm(){
 /*
  * CAN RX callbackを登録する
  *
- * ACKは使用しない。
- * STM32からHOMING_DONEが返ってきたらhoming終了とする。
+ * can_protocol記載の
+ *   HOMING -> HOMING_ACK -> (Homing処理) -> HOMING_DONE -> HOMING_DONE_ACK
+ * のシーケンスに従う。
  */
 esp_err_t arms_init(){
     if(arms_init_already_done)return ESP_ERR_NOT_ALLOWED;
+
+    can_register_rx_callback(
+        CAN_ID_LOWER_HOMING_ACK,
+        lower_arm_homing_ack_notify
+    );
+
+    can_register_rx_callback(
+        CAN_ID_UPPER_HOMING_ACK,
+        upper_arm_homing_ack_notify
+    );
 
     can_register_rx_callback(
         CAN_ID_LOWER_HOMING_DONE,
@@ -160,6 +168,8 @@ esp_err_t arms_init(){
 esp_err_t lower_arm_homing(){
     if(lower_arm_homing_in_progress)return ESP_ERR_NOT_FINISHED;
 
+    lower_arm_homing_sequence++; // 新しいホーミング試行ごとに番号を進める(0-255循環)
+
     can_command_data_t command = {
         .id = CAN_ID_LOWER_HOMING,
         .data.homing_sequence = lower_arm_homing_sequence,
@@ -190,6 +200,8 @@ esp_err_t lower_arm_homing(){
 esp_err_t upper_arm_homing(){
     if (upper_arm_homing_in_progress)return ESP_ERR_NOT_FINISHED;
 
+    upper_arm_homing_sequence++; // 新しいホーミング試行ごとに番号を進める(0-255循環)
+
     can_command_data_t command = {
         .id = CAN_ID_UPPER_HOMING,
         .data.homing_sequence = upper_arm_homing_sequence,
@@ -213,7 +225,42 @@ esp_err_t upper_arm_homing(){
 
 /*
  * STM32 -> ESP32
+ * CAN_ID_LOWER_HOMING_ACK
+ *
+ * Homing要求が受理され，ホーミング処理が開始されたことの確認。
+ * CAN rx taskからcallbackされるので重い処理はしない。
+ */
+static void lower_arm_homing_ack_notify(const can_data_t *data){
+    if (data->homing_sequence != lower_arm_homing_sequence) {
+        ESP_LOGW(ARM_TAG, "lower homing ACK sequence mismatch: rx=%u expected=%u",
+            data->homing_sequence, lower_arm_homing_sequence);
+        return;
+    }
+    ESP_LOGI(ARM_TAG, "lower arm homing ACK received. sequence=%u", lower_arm_homing_sequence);
+}
+
+
+/*
+ * STM32 -> ESP32
+ * CAN_ID_UPPER_HOMING_ACK
+ */
+static void upper_arm_homing_ack_notify(const can_data_t *data){
+    if (data->homing_sequence != upper_arm_homing_sequence) {
+        ESP_LOGW(ARM_TAG, "upper homing ACK sequence mismatch: rx=%u expected=%u",
+            data->homing_sequence, upper_arm_homing_sequence);
+        return;
+    }
+    ESP_LOGI(ARM_TAG, "upper arm homing ACK received. sequence=%u", upper_arm_homing_sequence);
+}
+
+
+/*
+ * STM32 -> ESP32
  * CAN_ID_LOWER_HOMING_DONE
+ *
+ * 受信したらCAN_ID_LOWER_HOMING_DONE_ACKを返す。
+ * STM32側はACKが届くまでHOMING_DONEを再送してくるため，
+ * 既にhoming完了済み(in_progress==false)でも同じsequenceならACKを返し直す(冪等)。
  *
  * CAN rx taskからcallbackされるので重い処理はしない。
  */
@@ -221,50 +268,54 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
     direct_t larm = LOWER_ARM_HOME_COORDINATE;
     lower_arm.x = larm.x;
     lower_arm.y = larm.y;
-    if (!lower_arm_homing_in_progress) {
-        ESP_LOGW(ARM_TAG,"lower homing DONE received while not homing.");
-        return;
-    }
 
     if (data->homing_sequence != lower_arm_homing_sequence) {
-        ESP_LOGE(ARM_TAG,"lower homing sequence error: rx=%u expected=%u",
+        ESP_LOGE(ARM_TAG,"lower homing DONE sequence error: rx=%u expected=%u",
             data->homing_sequence,lower_arm_homing_sequence
         );
         return;
     }
 
-    lower_arm_homing_in_progress = false;
+    if (lower_arm_homing_in_progress) {
+        lower_arm_homing_in_progress = false;
+        ESP_LOGI(ARM_TAG, "lower arm homing done. sequence=%u", lower_arm_homing_sequence);
+    }
 
-    ESP_LOGI(ARM_TAG, "lower arm homing done. sequence=%u", lower_arm_homing_sequence);
-
-    lower_arm_homing_sequence++;
+    can_command_data_t ack = {
+        .id = CAN_ID_LOWER_HOMING_DONE_ACK,
+        .data.homing_sequence = lower_arm_homing_sequence,
+    };
+    can_tx(&ack);
 }
 
 
 /*
  * STM32 -> ESP32
  * CAN_ID_UPPER_HOMING_DONE
+ *
+ * (lower側と同様，STM32からの再送に対して冪等にDONE_ACKを返す)
  */
 static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
     upper_arm.x = uarm.x;
     upper_arm.y = uarm.y;
-    if (!upper_arm_homing_in_progress) {
-        ESP_LOGW(ARM_TAG, "upper homing DONE received while not homing.");
-        return;
-    }
 
     if (data->homing_sequence != upper_arm_homing_sequence) {
-        ESP_LOGE(ARM_TAG, "upper homing sequence error: rx=%u expected=%u",
+        ESP_LOGE(ARM_TAG, "upper homing DONE sequence error: rx=%u expected=%u",
             data->homing_sequence, upper_arm_homing_sequence);
         return;
     }
 
-    upper_arm_homing_in_progress = false;
+    if (upper_arm_homing_in_progress) {
+        upper_arm_homing_in_progress = false;
+        ESP_LOGI(ARM_TAG, "upper arm homing done. sequence=%u", upper_arm_homing_sequence);
+    }
 
-    ESP_LOGI(ARM_TAG, "upper arm homing done. sequence=%u", upper_arm_homing_sequence);
-
-    upper_arm_homing_sequence++;
+    can_command_data_t ack = {
+        .id = CAN_ID_UPPER_HOMING_DONE_ACK,
+        .data.homing_sequence = upper_arm_homing_sequence,
+    };
+    can_tx(&ack);
 }
 
 
