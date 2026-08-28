@@ -98,6 +98,7 @@ void main_task(void* arg){
     #define upper_mypad mypad[1]
     #define lower_prev_mypad prev_mypad[0]
     #define upper_prev_mypad prev_mypad[1]
+    bool status_led_state = false; // STATUS_LED点滅(生存確認)用
     get_mypad(mypad);
     while(1){
         memcpy(prev_mypad,mypad,sizeof(mypad));
@@ -110,6 +111,12 @@ void main_task(void* arg){
         led_set_level(CONTROLLER_1_LED_GPIO, mypad[0].connected);
         led_set_level(CONTROLLER_2_LED_GPIO, mypad[1].connected);
         led_set_level(ROBOMAS_CONTROLLER_STATUS_LED_GPIO, get_connection(MICON_TYPE_ROBOMAS_CONTROLLER));
+        led_set_level(LOWER_ARM_STATUS_LED_GPIO, get_connection(MICON_TYPE_LOWER_ARM));
+        led_set_level(UPPER_ARM_STATUS_LED_GPIO, get_connection(MICON_TYPE_UPPER_ARM));
+        led_set_level(CAN_STATUS_LED_GPIO, can_is_running());
+
+        status_led_state = !status_led_state; // main_taskが生きている限り点滅し続ける
+        led_set_level(STATUS_LED_GPIO, status_led_state);
         
         lower_arm_move(
             lower_mypad.RIGHT - lower_mypad.LEFT,

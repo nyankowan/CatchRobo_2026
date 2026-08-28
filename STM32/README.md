@@ -1,7 +1,7 @@
 
 # STM32
 
-キャチロボ2026で使用する3台のSTM32(Nucleo)のプログラムをまとめたディレクトリ．
+キャチロボ2026で使用する4台のSTM32(Nucleo)のプログラムをまとめたディレクトリ．
 それぞれSTM32CubeMXで生成された独立したCMakeプロジェクトであり，共通してMain Controller(ESP32)とCANで接続される．
 
 ## Directory structure

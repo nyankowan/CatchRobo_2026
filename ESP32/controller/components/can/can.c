@@ -18,6 +18,12 @@ static bool already_can_init_and_start = false;
 static int callback_entry_num = 0;
 static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NUM_ITEMS] = {0};
 
+static volatile bool can_running = false;
+
+bool can_is_running(){
+    return can_running;
+}
+
 esp_err_t can_tx(can_command_data_t *com_data){
     if(com_data == NULL){
         ESP_LOGE(CAN_TAG, "Argument is invalid");
@@ -121,8 +127,10 @@ void can_error_handling_task(void *arg)
     while (1) {
         if(twai_get_status_info(&s)){
             ESP_LOGE(CAN_TAG, "CAN is not installed.");
+            can_running = false;
             vTaskDelete(NULL);
         }
+        can_running = (s.state == TWAI_STATE_RUNNING);
         switch (s.state) {
             case TWAI_STATE_BUS_OFF:
                 ESP_LOGE(CAN_TAG, "BUS OFF");

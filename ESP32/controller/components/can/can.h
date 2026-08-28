@@ -4,6 +4,7 @@
 #include "can_protocol.h"
 #include "esp_err.h"
 #include "soc/gpio_num.h"
+#include <stdbool.h>
 
 typedef void (*can_rx_callback_t)(const can_data_t *data);
 
@@ -14,4 +15,7 @@ esp_err_t can_tx(can_command_data_t *com);
 esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx);
 void can_error_handling_task(void *arg);
 void can_rx_task(void *arg);
+
+// CAN(TWAI)が現在TWAI_STATE_RUNNING(正常送受信可能)かどうか
+bool can_is_running();
 #endif //CAN_H
