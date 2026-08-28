@@ -1,5 +1,33 @@
 
-# 各プロジェクトのCMakeLists.txt
+# STM32
+
+キャチロボ2026で使用する3台のSTM32(Nucleo)のプログラムをまとめたディレクトリ．
+それぞれSTM32CubeMXで生成された独立したCMakeプロジェクトであり，共通してMain Controller(ESP32)とCANで接続される．
+
+## Directory structure
+
+```text
+STM32/
+├── common/
+│   └── STM32プロジェクト間の共通コード(CANラッパー等)．詳細は common/README.md 参照
+│
+├── robomas_controller/
+│   └── 両アームのr軸・deg軸(Robomaster M3508/M2006)の制御．ホーミング処理の中枢
+│
+├── lower_arm_servo/
+│   └── 下アームのハンド(Left/Middle/Right/Expand)とShaftサーボの制御
+│
+└── upper_arm_servo/
+    └── 上アームのShaft/Zサーボの制御
+```
+
+各プロジェクトの詳細は，それぞれのディレクトリ内のREADME.mdを参照．
+
+## 共通ライブラリのリンク方法
+
+STM32/common (CANラッパー) と，ESP32とも共有する common/ (CAN ID定義・座標変換) を，各プロジェクトの `CMakeLists.txt` から以下のようにリンクする．
+
+### 各プロジェクトのCMakeLists.txt
 ```CMake
 # STM32共通CAN
 add_subdirectory(
@@ -29,3 +57,19 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     coordinate
 )
 ```
+
+`robomas_controller` のみ，ホーミングのタイムアウト・速度・可動域の定数を使うため，上記に加えて `common/arm` も追加でリンクしている．
+
+```CMake
+# ESP32 / STM32共通 アームパラメータ
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../../common/arm"
+    "${CMAKE_BINARY_DIR}/arm"
+)
+
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    ...
+    arm
+)
+```
+

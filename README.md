@@ -6,6 +6,9 @@ Team: OBT
 ```text
 CatchRobo_2026/
 ├── common/
+│   ├── arm/
+│   │   └── アームの可動域・ホーミング関連定数(ESP32/STM32共通)
+│   │
 │   ├── can_protocol/
 │   │   └── canのidとdataの対応
 │   │
