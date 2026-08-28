@@ -40,6 +40,27 @@ r軸・deg軸は基本的に独立して状態遷移するが，`ROBOMAS_READY`�
 
 ---
 
+## ロボマスターのCAN ID対応
+
+`robomas_receive()`は受信したCAN ID(0x201〜0x204)をそのまま配列indexに変換して`robomas[]`に格納している．
+
+```c
+uint8_t robomas_id = rx_header.StdId - 0x201; // 0x201→0, 0x202→1, 0x203→2, 0x204→3
+```
+
+このindexと実際のアーム・軸の対応は以下の通り．**ロボマスター(C620等)側のCAN ID設定は，この対応に合わせて配線・設定すること．**
+
+| CAN ID | `robomas[]` index | マクロ名 | 対応する軸 |
+| :---: | :---: | :--- | :--- |
+| `0x201` (ID1) | `robomas[0]` | `robomas_lower_deg` | 下アーム 偏角(deg) |
+| `0x202` (ID2) | `robomas[1]` | `robomas_lower_r`   | 下アーム 伸縮(r) |
+| `0x203` (ID3) | `robomas[2]` | `robomas_upper_deg` | 上アーム 偏角(deg) |
+| `0x204` (ID4) | `robomas[3]` | `robomas_upper_r`   | 上アーム 伸縮(r) |
+
+配線側のCAN ID設定とこの対応がずれると，例えば意図したR軸の代わりにDEG軸のエラーが報告される，といった混乱の原因になるので注意．
+
+---
+
 ## Homingシーケンス
 
 `common/can_protocol/README.md` に記載の
@@ -69,6 +90,7 @@ Main Controller                     Robomas Controller
 - `HOMING_UPPER_DEG_RPM` / `HOMING_LOWER_DEG_RPM` / `HOMING_UPPER_R_RPM` / `HOMING_LOWER_R_RPM` (`common/arm/inc/arm.h`)で指定される回転数でリミットスイッチ方向へ回転する．
 - リミットスイッチ検出で`ROBOMAS_IDLE`に遷移し，その時点のロボマス角度を極座標原点(r軸は`*_ARM_R_MIN`を考慮したオフセット付き)として記録する．
 - `HOMING_UPPER_ARM_TIMEOUT_MS` / `HOMING_LOWER_ARM_TIMEOUT_MS`(いずれも10000ms)以内にリミットスイッチを検出できなければ，両軸を`ROBOMAS_INITIAL`に戻し，`CAN_ID_ERROR_CODE`(`CAN_ERROR_*_HOMING_TIMEOUT`)を送信する．リミットスイッチ故障や配線不良で無限に回転し続けることを防ぐための仕組み．
+- このタイムアウト通知は，一度のホーミング試行につき`upper/lower_homing_timeout_notified`フラグにより1回だけ送信される．`ROBOMAS_ERROR`(フィードバック途絶)状態の軸は上書きせずそのまま`robomas_update()`に管理を委ねるため，タイムアウト処理と`ROBOMAS_ERROR`検知が互いの状態を打ち消し合って`CAN_ID_ERROR_CODE`を送り続ける(スパムする)ことがない．フラグは新しいホーミング要求を受理した時点でリセットされる．
 
 ### HOMING_DONE送信 → HOMING_DONE_ACK待ち
 - 両軸が`ROBOMAS_IDLE`になった瞬間，`ROBOMAS_READY`に遷移すると同時に，保持していたsequence numberで`HOMING_DONE`を送信する．
@@ -101,3 +123,24 @@ Main Controller                     Robomas Controller
 | `HOMING_REQUEST_RETRY_MS` | 100 ms | `ESP32/controller/main/robot/arm_command.c` | `HOMING`要求(Main Controller→Arm)の再送間隔 |
 
 `HOMING_UPPER/LOWER_DEG_RPM`・`HOMING_UPPER/LOWER_R_RPM`は，上記タイムアウトに対して`HOMING_TIMEOUT_MARGIN_RATE`分の余裕(既定60%)を持って完了するよう`common/arm/inc/arm.h`で自動計算している．
+
+---
+
+## Status_LED
+
+`status_led_update()`が，lower/upperそれぞれのアームが`ROBOMAS_READY`(r軸・deg軸とも)かどうかをStatus_LEDの点滅回数で表示する．周期的(mainループ毎)に呼び出す非ブロッキングの実装．
+
+| 状態 | 表示 |
+| :--- | :--- |
+| 両方`READY` | 常時点灯 |
+| lowerのみ未`READY` | 1回点滅 |
+| upperのみ未`READY` | 2回点滅 |
+| 両方とも未`READY` | 3回点滅 |
+
+点滅回数 = (lowerが未READYなら+1) + (upperが未READYなら+2) で算出しており，1回点滅→短い消灯→1回点滅…を`blink_count`回繰り返した後，`STATUS_LED_BLINK_PAUSE_MS`(700ms)の消灯を挟んで最初から繰り返す．
+
+| 定数 | 値 | 説明 |
+| :--- | ---: | :--- |
+| `STATUS_LED_BLINK_ON_MS` | 150 ms | 1回の点滅の点灯時間 |
+| `STATUS_LED_BLINK_OFF_MS` | 150 ms | 点滅同士の間の消灯時間 |
+| `STATUS_LED_BLINK_PAUSE_MS` | 700 ms | 1周(blink_count回)表示し終えた後の消灯時間 |

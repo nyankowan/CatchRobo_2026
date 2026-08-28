@@ -198,6 +198,27 @@ if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
 ```
 
 ### LED
+
+Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)を点滅回数で表示する．CAN受信ハンドラでON/OFFを保持しておき，`status_led_update()`を周期的(mainループ毎)に呼ぶことで非ブロッキングに表示する．
+
+表示順は Left → Middle → Right → Expand で，各chはONなら2回，OFFなら1回の短い点滅で表す(点滅回数を数えればON/OFFが分かる)．周期の始まりは長い点灯(マーカー)で示す．
+
+```text
+[長い点灯(マーカー)] [消灯] [Left:1or2回点滅] [消灯] [Middle:1or2回点滅] [消灯] [Right:...] [消灯] [Expand:...] [消灯(長め)] → 最初に戻る
+```
+
+| 定数 | 値 | 説明 |
+| :--- | ---: | :--- |
+| `STATUS_LED_MARKER_MS` | 1000 ms | 周期の始まりを示す長い点灯 |
+| `STATUS_LED_BLINK_MS` | 300 ms | 1回分の点滅の点灯時間 |
+| `STATUS_LED_INTRA_GAP_MS` | 300 ms | ONの2回点滅の間の消灯時間 |
+| `STATUS_LED_CHANNEL_GAP_MS` | 700 ms | ch同士の間，およびマーカー直後の消灯時間 |
+| `STATUS_LED_END_PAUSE_MS` | 1200 ms | 4ch分表示し終えてから次のマーカーまでの消灯時間 |
+
+実装は`status_led_state_t`によるステートマシン(`STATUS_LED_STATE_MARKER` → `..._CHANNEL_GAP` → `..._BLINK_ON`/`..._BLINK_GAP`(chごとに1〜2回) → `..._END_PAUSE` → 最初に戻る)．ONかOFFかで点滅回数が変わるため，固定長のフェーズ表ではなくこの状態機械で管理している．
+
+`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．
+
 ```C
 /* USER CODE BEGIN 2 */
 HAL_GPIO_WritePin(

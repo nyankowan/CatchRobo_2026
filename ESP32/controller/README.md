@@ -54,6 +54,8 @@ void micon_connection_update();      // 周期的に呼び，Heartbeatタイム�
 bool get_connection(micon_type_t m);  // 対象のマイコンと通信できているか
 ```
 
+`MICON_TYPE_ROBOMAS_CONTROLLER` / `MICON_TYPE_UPPER_ARM` / `MICON_TYPE_LOWER_ARM` の3種類とも実装済み．`micon_connection_update()`は`HEARTBEAT_TIMEOUT_MS`(1000ms)を`pdMS_TO_TICKS()`でtick単位に変換してから経過tick数と比較する(逆にすると桁を間違えるので注意)．
+
 ### robot/arm_command
 
 両アーム(Upper/Lower)への座標指令とホーミングシーケンスを実装する．
@@ -61,11 +63,22 @@ bool get_connection(micon_type_t m);  // 対象のマイコンと通信できて
 - `lower_arm_move()` / `upper_arm_move()` : ジョイスティックの差分入力を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．ホーミング中は無視する．
 - `send_lower_arm()` / `send_upper_arm()` : 現在座標をCANで送信する．ホーミング中は送信しない．
 - `lower_arm_homing()` / `upper_arm_homing()` : ホーミング要求(`HOMING`)をSTM32(robomas_controller)に送信する．
-- `arms_update()` : 周期的に呼び，`HOMING_ACK`未受信時の要求再送や，ホーミング全体のタイムアウト判定を行う．
-- CAN受信コールバック(`*_homing_ack_notify`, `*_homing_done_notify`, `error_code_notify`) で，STM32側からのACK・完了通知・エラー通知を処理する．
+- `arms_update()` : 周期的に呼び，`HOMING_ACK`未受信時の要求再送(`HOMING_REQUEST_RETRY_MS`=100msごと)や，ホーミング全体のタイムアウト判定を行う．
+- CAN受信コールバック(`*_homing_ack_notify`, `*_homing_done_notify`, `error_code_notify`) で，STM32側からのACK・完了通知・エラー通知を処理する．`error_code_notify`はタイムアウト系・拒否系のエラーを受け取った時点で，ESP32側の10秒待ちを待たずに即座に`homing_in_progress`を解除する．
 
 ホーミングのシーケンス(ACK・DONE・再送を含む)の詳細は [STM32/robomas_controller/README.md](../../STM32/robomas_controller/README.md) を参照．
 
 ### led / gpio
 
-`gpio.h` に定義されたGPIO番号を使って，CAN通信状態や各STM32との接続状態をLEDで表示する．
+`gpio.h`で定義された7つのLEDを`main_task`のループ毎に更新する．
+
+| LED (`gpio.h`) | 表示内容 |
+| :--- | :--- |
+| `CONTROLLER_1_LED_GPIO` / `CONTROLLER_2_LED_GPIO` | 各プロコンが接続されているか |
+| `ROBOMAS_CONTROLLER_STATUS_LED_GPIO` | `get_connection(MICON_TYPE_ROBOMAS_CONTROLLER)` |
+| `LOWER_ARM_STATUS_LED_GPIO` | `get_connection(MICON_TYPE_LOWER_ARM)` |
+| `UPPER_ARM_STATUS_LED_GPIO` | `get_connection(MICON_TYPE_UPPER_ARM)` |
+| `CAN_STATUS_LED_GPIO` | `can_is_running()`(CANが`TWAI_STATE_RUNNING`か) |
+| `STATUS_LED_GPIO` | `main_task`のループ毎にON/OFFを反転させる生存確認用(約3.8Hzで点滅) |
+
+`can_is_running()`は`components/can`に追加したAPIで，`can_error_handling_task()`内で追跡している現在のTWAI状態を返す．
