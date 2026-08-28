@@ -210,8 +210,8 @@ Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)�
 | 定数 | 値 | 説明 |
 | :--- | ---: | :--- |
 | `STATUS_LED_MARKER_MS` | 1000 ms | 周期の始まりを示す長い点灯 |
-| `STATUS_LED_BLINK_MS` | 300 ms | 1回分の点滅の点灯時間 |
-| `STATUS_LED_INTRA_GAP_MS` | 300 ms | ONの2回点滅の間の消灯時間 |
+| `STATUS_LED_BLINK_MS` | 100 ms | 1回分の点滅の点灯時間 |
+| `STATUS_LED_INTRA_GAP_MS` | 100 ms | ONの2回点滅の間の消灯時間 |
 | `STATUS_LED_CHANNEL_GAP_MS` | 700 ms | ch同士の間，およびマーカー直後の消灯時間 |
 | `STATUS_LED_END_PAUSE_MS` | 1200 ms | 4ch分表示し終えてから次のマーカーまでの消灯時間 |
 
