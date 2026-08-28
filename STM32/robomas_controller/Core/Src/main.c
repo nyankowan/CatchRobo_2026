@@ -231,7 +231,16 @@ void command_receive(can_command_data_t *com){
     break;
   case CAN_ID_UPPER_HOMING:
     if(!robomas_upper_deg.feedback.initialized || !robomas_upper_r.feedback.initialized)return;
-    if(robomas_upper_r.state == ROBOMAS_IDLE || robomas_upper_deg.state == ROBOMAS_IDLE)return;
+    if(robomas_upper_r.state == ROBOMAS_IDLE || robomas_upper_deg.state == ROBOMAS_IDLE){
+      // 既に受理済みの要求の再送(ACK消失)ならACKを返し直す．新規の要求は無視する．
+      if(com->data.homing_sequence == upper_homing_sequence){
+        stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+          .id = CAN_ID_UPPER_HOMING_ACK,
+          .data.homing_sequence = upper_homing_sequence,
+        });
+      }
+      return;
+    }
     if(robomas_upper_r.state == ROBOMAS_ERROR || robomas_upper_deg.state == ROBOMAS_ERROR){
       stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
         .id = CAN_ID_ERROR_CODE,
@@ -255,7 +264,16 @@ void command_receive(can_command_data_t *com){
     break;
   case CAN_ID_LOWER_HOMING:
     if(!robomas_lower_deg.feedback.initialized || !robomas_lower_r.feedback.initialized)return;
-    if(robomas_lower_r.state == ROBOMAS_IDLE || robomas_lower_deg.state == ROBOMAS_IDLE)return;
+    if(robomas_lower_r.state == ROBOMAS_IDLE || robomas_lower_deg.state == ROBOMAS_IDLE){
+      // 既に受理済みの要求の再送(ACK消失)ならACKを返し直す．新規の要求は無視する．
+      if(com->data.homing_sequence == lower_homing_sequence){
+        stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
+          .id = CAN_ID_LOWER_HOMING_ACK,
+          .data.homing_sequence = lower_homing_sequence,
+        });
+      }
+      return;
+    }
     if(robomas_lower_r.state == ROBOMAS_ERROR || robomas_lower_deg.state == ROBOMAS_ERROR){
       stm_can_send(&COMMAND_HCAN, &(can_command_data_t){
         .id = CAN_ID_ERROR_CODE,

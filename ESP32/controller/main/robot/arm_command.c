@@ -38,9 +38,19 @@ static bool arms_init_already_done = false;
 static bool lower_arm_homing_in_progress = false;
 static bool upper_arm_homing_in_progress = false;
 
+/* HOMING要求送信後，HOMING_ACKを受信できたか */
+static bool lower_arm_homing_ack_received = false;
+static bool upper_arm_homing_ack_received = false;
+
 /* homing開始時刻 */
 static TickType_t lower_arm_homing_start_tick = 0;
 static TickType_t upper_arm_homing_start_tick = 0;
+
+/* HOMING要求を最後に(再)送信した時刻。ACK未受信ならこれを基準に再送する */
+static TickType_t lower_arm_homing_request_sent_tick = 0;
+static TickType_t upper_arm_homing_request_sent_tick = 0;
+
+#define HOMING_REQUEST_RETRY_MS 100 //ACKが届かない場合，この間隔でHOMING要求を再送する
 
 
 // homing中は動かない
@@ -159,6 +169,27 @@ esp_err_t arms_init(){
 }
 
 
+/*
+ * Lower/Upper Arm Homing要求(HOMING)を送信する内部ヘルパー。
+ * 新規送信・再送どちらからも使う。
+ */
+static esp_err_t send_lower_homing_request(){
+    can_command_data_t command = {
+        .id = CAN_ID_LOWER_HOMING,
+        .data.homing_sequence = lower_arm_homing_sequence,
+    };
+    return can_tx(&command);
+}
+
+static esp_err_t send_upper_homing_request(){
+    can_command_data_t command = {
+        .id = CAN_ID_UPPER_HOMING,
+        .data.homing_sequence = upper_arm_homing_sequence,
+    };
+    return can_tx(&command);
+}
+
+
 /*can_tx(&com)
  * Lower Arm Homing開始
  *
@@ -169,13 +200,9 @@ esp_err_t lower_arm_homing(){
     if(lower_arm_homing_in_progress)return ESP_ERR_NOT_FINISHED;
 
     lower_arm_homing_sequence++; // 新しいホーミング試行ごとに番号を進める(0-255循環)
+    lower_arm_homing_ack_received = false;
 
-    can_command_data_t command = {
-        .id = CAN_ID_LOWER_HOMING,
-        .data.homing_sequence = lower_arm_homing_sequence,
-    };
-
-    esp_err_t err = can_tx(&command);
+    esp_err_t err = send_lower_homing_request();
 
     if (err != ESP_OK) {
         ESP_LOGE(ARM_TAG,"lower arm homing command failed.");
@@ -184,6 +211,7 @@ esp_err_t lower_arm_homing(){
 
     lower_arm_homing_in_progress = true;
     lower_arm_homing_start_tick = xTaskGetTickCount();
+    lower_arm_homing_request_sent_tick = lower_arm_homing_start_tick;
 
     ESP_LOGI(ARM_TAG,"lower arm homing start. sequence=%u",lower_arm_homing_sequence);
 
@@ -201,13 +229,9 @@ esp_err_t upper_arm_homing(){
     if (upper_arm_homing_in_progress)return ESP_ERR_NOT_FINISHED;
 
     upper_arm_homing_sequence++; // 新しいホーミング試行ごとに番号を進める(0-255循環)
+    upper_arm_homing_ack_received = false;
 
-    can_command_data_t command = {
-        .id = CAN_ID_UPPER_HOMING,
-        .data.homing_sequence = upper_arm_homing_sequence,
-    };
-
-    esp_err_t err = can_tx(&command);
+    esp_err_t err = send_upper_homing_request();
 
     if (err != ESP_OK) {
         ESP_LOGE(ARM_TAG,"upper arm homing command failed.");
@@ -216,6 +240,7 @@ esp_err_t upper_arm_homing(){
 
     upper_arm_homing_in_progress = true;
     upper_arm_homing_start_tick = xTaskGetTickCount();
+    upper_arm_homing_request_sent_tick = upper_arm_homing_start_tick;
 
     ESP_LOGI(ARM_TAG,"upper arm homing start. sequence=%u",upper_arm_homing_sequence);
 
@@ -236,6 +261,7 @@ static void lower_arm_homing_ack_notify(const can_data_t *data){
             data->homing_sequence, lower_arm_homing_sequence);
         return;
     }
+    lower_arm_homing_ack_received = true;
     ESP_LOGI(ARM_TAG, "lower arm homing ACK received. sequence=%u", lower_arm_homing_sequence);
 }
 
@@ -250,6 +276,7 @@ static void upper_arm_homing_ack_notify(const can_data_t *data){
             data->homing_sequence, upper_arm_homing_sequence);
         return;
     }
+    upper_arm_homing_ack_received = true;
     ESP_LOGI(ARM_TAG, "upper arm homing ACK received. sequence=%u", upper_arm_homing_sequence);
 }
 
@@ -377,6 +404,13 @@ void arms_update(){
 
     /* Lower Arm */
     if (lower_arm_homing_in_progress) {
+        if (!lower_arm_homing_ack_received &&
+            (now - lower_arm_homing_request_sent_tick) >= pdMS_TO_TICKS(HOMING_REQUEST_RETRY_MS)) {
+            ESP_LOGW(ARM_TAG, "lower arm homing request retry. sequence=%u", lower_arm_homing_sequence);
+            send_lower_homing_request();
+            lower_arm_homing_request_sent_tick = now;
+        }
+
         if ((now - lower_arm_homing_start_tick) >= pdMS_TO_TICKS(HOMING_LOWER_ARM_TIMEOUT_MS)) {
             ESP_LOGE(ARM_TAG, "lower arm homing timeout. sequence=%u", lower_arm_homing_sequence);
 
@@ -386,6 +420,13 @@ void arms_update(){
 
     /* Upper Arm */
     if (upper_arm_homing_in_progress) {
+        if (!upper_arm_homing_ack_received &&
+            (now - upper_arm_homing_request_sent_tick) >= pdMS_TO_TICKS(HOMING_REQUEST_RETRY_MS)) {
+            ESP_LOGW(ARM_TAG, "upper arm homing request retry. sequence=%u", upper_arm_homing_sequence);
+            send_upper_homing_request();
+            upper_arm_homing_request_sent_tick = now;
+        }
+
         if ((now - upper_arm_homing_start_tick) >= pdMS_TO_TICKS(HOMING_UPPER_ARM_TIMEOUT_MS)) {
             ESP_LOGE(ARM_TAG, "upper arm homing timeout. sequence=%u", upper_arm_homing_sequence);
 
