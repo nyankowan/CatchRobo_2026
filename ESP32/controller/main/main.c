@@ -119,8 +119,8 @@ void main_task(void* arg){
         led_set_level(STATUS_LED_GPIO, status_led_state);
         
         lower_arm_move(
-            lower_mypad.RIGHT - lower_mypad.LEFT,
-            lower_mypad.UP - lower_mypad.DOWN,
+            lower_mypad.RIGHT - lower_mypad.LEFT + lower_mypad.LX,
+            lower_mypad.UP -    lower_mypad.DOWN + lower_mypad.LY,
             PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
             PRESSED(lower_mypad.X, lower_prev_mypad.X),
             PRESSED(lower_mypad.A, lower_prev_mypad.A),
@@ -129,8 +129,8 @@ void main_task(void* arg){
         send_lower_arm();
 
         upper_arm_move(
-            upper_mypad.RIGHT - upper_mypad.LEFT,
-            upper_mypad.UP -    upper_mypad.DOWN,
+            upper_mypad.RIGHT - upper_mypad.LEFT + upper_mypad.LX,
+            upper_mypad.UP -    upper_mypad.DOWN + upper_mypad.LY,
             upper_mypad.A -     upper_mypad.B
         );
         send_upper_arm();
