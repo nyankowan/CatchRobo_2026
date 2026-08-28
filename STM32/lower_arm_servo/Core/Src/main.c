@@ -25,6 +25,7 @@
 #include "coordinate.h"
 #include "stm_can.h"
 #include <math.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,6 +37,15 @@
 /* USER CODE BEGIN PD */
 #define SERVO_0   500
 #define SERVO_270 2500
+
+// Status_LEDでLeft->Middle->Right->Expandの順に各chの状態を点滅回数で表示する
+// 長いマーカー点灯(周期の開始) -> 各chごとに短い点滅(ON:2回 OFF:1回) -> 一定時間消灯 の繰り返し
+#define STATUS_LED_MARKER_MS     1000 //周期の始まりを示す長い点灯
+#define STATUS_LED_BLINK_MS      100  //1回分の点滅の点灯時間
+#define STATUS_LED_INTRA_GAP_MS  100  //ONの2回点滅の間の消灯時間
+#define STATUS_LED_CHANNEL_GAP_MS 700 //ch同士の間，およびマーカー直後の消灯時間(繋がって見えないように)
+#define STATUS_LED_END_PAUSE_MS  1200 //4ch分表示し終えてから次のマーカーまでの消灯時間
+#define LOOP_MS 2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,6 +64,22 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
+
+// 現在のLeft/Middle/Right/Expandの状態(true=ON)．Status_LEDの点滅表示に使う
+bool lower_arm_left, lower_arm_middle, lower_arm_right, lower_arm_expand;
+
+typedef enum{
+  STATUS_LED_STATE_MARKER,          //周期開始の長い点灯
+  STATUS_LED_STATE_CHANNEL_GAP,     //ch移行時(マーカー直後含む)の消灯
+  STATUS_LED_STATE_BLINK_ON,        //点滅の点灯中
+  STATUS_LED_STATE_BLINK_GAP,       //点滅の点灯の間，または最後の点滅後の消灯
+  STATUS_LED_STATE_END_PAUSE,       //4ch分表示し終えた後の消灯
+}status_led_state_t;
+
+status_led_state_t status_led_state;
+uint32_t status_led_phase_start;
+uint8_t status_led_channel_index;     //現在表示中のch(0:Left 1:Middle 2:Right 3:Expand)
+uint8_t status_led_blinks_remaining;  //現在のchで残っている点滅回数
 
 /* USER CODE END PV */
 
@@ -74,10 +100,13 @@ static void MX_TIM3_Init(void);
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
-  HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port,STATUS_LED_Pin);
 
   switch (rx_header.StdId) {
   case CAN_ID_LOWER_ARM_COMMAND:
+    lower_arm_left   = rx_data.lower_arm.left;
+    lower_arm_middle = rx_data.lower_arm.middle;
+    lower_arm_right  = rx_data.lower_arm.right;
+    lower_arm_expand = rx_data.lower_arm.expand;
 
     if(rx_data.lower_arm.left)  {__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
     if(rx_data.lower_arm.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
@@ -88,6 +117,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     break;
 
   case CAN_ID_LOWER_HOMING:
+    lower_arm_left = false;
+    lower_arm_middle = false;
+    lower_arm_right = false;
+    lower_arm_expand = false;
+
     __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
     __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
@@ -98,6 +132,93 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   default:
     break;
   }
+}
+
+/**
+* @brief chのindex(0:Left 1:Middle 2:Right 3:Expand)から現在の状態(true=ON)を返す．
+*/
+static bool status_led_channel_value(uint8_t channel_index){
+  switch(channel_index){
+    case 0: return lower_arm_left;
+    case 1: return lower_arm_middle;
+    case 2: return lower_arm_right;
+    default: return lower_arm_expand;
+  }
+}
+
+/**
+* @brief Status_LEDに，先頭の長いマーカー点灯に続けてLeft->Middle->Right->Expandの
+*        順で各chの状態を点滅回数で表示する．ONは2回，OFFは1回の短い点滅．
+*        ch同士の間には必ず消灯を挟むので，何回点滅したかを数えればON/OFFが分かる．
+*        4ch分表示し終えたら一定時間消灯してから，再びマーカーに戻る．
+*        周期的(mainループ毎)に呼び出すこと．
+*/
+void status_led_update(){
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - status_led_phase_start;
+
+  switch(status_led_state){
+  case STATUS_LED_STATE_MARKER:
+    if(elapsed >= STATUS_LED_MARKER_MS){
+      status_led_state = STATUS_LED_STATE_CHANNEL_GAP;
+      status_led_channel_index = 0;
+      status_led_phase_start = now;
+    }
+    break;
+
+  case STATUS_LED_STATE_CHANNEL_GAP:
+    if(elapsed >= STATUS_LED_CHANNEL_GAP_MS){
+      status_led_blinks_remaining = status_led_channel_value(status_led_channel_index) ? 2 : 1;
+      status_led_state = STATUS_LED_STATE_BLINK_ON;
+      status_led_phase_start = now;
+    }
+    break;
+
+  case STATUS_LED_STATE_BLINK_ON:
+    if(elapsed >= STATUS_LED_BLINK_MS){
+      status_led_blinks_remaining--;
+      status_led_state = STATUS_LED_STATE_BLINK_GAP;
+      status_led_phase_start = now;
+    }
+    break;
+
+  case STATUS_LED_STATE_BLINK_GAP:
+    if(status_led_blinks_remaining > 0){
+      // 同じchの2回目の点滅がまだ残っている
+      if(elapsed >= STATUS_LED_INTRA_GAP_MS){
+        status_led_state = STATUS_LED_STATE_BLINK_ON;
+        status_led_phase_start = now;
+      }
+    }else{
+      // このchの表示は終わり
+      if(elapsed >= STATUS_LED_CHANNEL_GAP_MS){
+        status_led_channel_index++;
+        status_led_phase_start = now;
+        if(status_led_channel_index >= 4){
+          status_led_state = STATUS_LED_STATE_END_PAUSE;
+        }else{
+          status_led_blinks_remaining = status_led_channel_value(status_led_channel_index) ? 2 : 1;
+          status_led_state = STATUS_LED_STATE_BLINK_ON;
+        }
+      }
+    }
+    break;
+
+  case STATUS_LED_STATE_END_PAUSE:
+    if(elapsed >= STATUS_LED_END_PAUSE_MS){
+      status_led_state = STATUS_LED_STATE_MARKER;
+      status_led_phase_start = now;
+    }
+    break;
+  }
+
+  bool on = (status_led_state == STATUS_LED_STATE_MARKER) ||
+            (status_led_state == STATUS_LED_STATE_BLINK_ON);
+  HAL_GPIO_WritePin(
+    STATUS_LED_GPIO_Port,
+    STATUS_LED_Pin,
+    on ? GPIO_PIN_SET : GPIO_PIN_RESET
+  );
 }
 /* USER CODE END 0 */
 
@@ -156,11 +277,17 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t last_heartbeat = HAL_GetTick();
   while (1)
   {
+    status_led_update();
+
+    if(HAL_GetTick() - last_heartbeat > HEARTBEAT_MS){
+      last_heartbeat = HAL_GetTick();
+      stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
+    }
     /* USER CODE END WHILE */
-    stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
-    HAL_Delay(HEARTBEAT_MS);
+    HAL_Delay(LOOP_MS);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
