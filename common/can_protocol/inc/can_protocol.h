@@ -44,11 +44,12 @@ typedef struct{
     union{
         uint8_t hand;//4
         struct{
-            uint8_t left    :1;
-            uint8_t middle  :1;
-            uint8_t right   :1;
-            uint8_t expand  :1;
-            uint8_t         :4;
+            uint8_t left         :1;
+            uint8_t middle       :1;
+            uint8_t right        :1;
+            uint8_t expand       :1;
+            uint8_t shaft_rotate :1; //1:ハンドの向きを90度回転させる
+            uint8_t              :3;
         };
     };
 }lower_arm_t;
