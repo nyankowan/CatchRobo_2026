@@ -37,6 +37,21 @@ struct uni_platform* get_my_platform(void);
 void main_task(void* arg);
 void dump_task(void* arg);
 
+void btstack_run_loop_task(void* arg) {
+    (void)arg;
+    // execute()を呼ぶのと同じタスクでinitする（ここがBTstack側のタスクハンドルとして記憶される）
+    // Configure BTstack for ESP32 VHCI Controller
+    btstack_init();
+
+    // Must be called before uni_init()
+    uni_platform_set_custom(get_my_platform());
+
+    // Init Bluepad32.
+    uni_init(0 /* argc */, NULL /* argv */);
+    // Does not return.
+    btstack_run_loop_execute();
+}
+
 int app_main(void) {
     // hci_dump_open(NULL, HCI_DUMP_STDOUT);
 
@@ -49,14 +64,7 @@ int app_main(void) {
 
 
 
-    // Configure BTstack for ESP32 VHCI Controller
-    btstack_init();
 
-    // Must be called before uni_init()
-    uni_platform_set_custom(get_my_platform());
-
-    // Init Bluepad32.
-    uni_init(0 /* argc */, NULL /* argv */);
 
     led_init();
     arms_init();
@@ -65,8 +73,7 @@ int app_main(void) {
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
     xTaskCreatePinnedToCore(main_task, "main_task", 4000, NULL, 1, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(dump_task, "dump_task", 5000, NULL, 1, NULL, APP_CPU_NUM);
-    // Does not return.
-    btstack_run_loop_execute();
+    xTaskCreatePinnedToCore(btstack_run_loop_task, "btstack_run_loop_task", 6000, NULL, 1, NULL, APP_CPU_NUM);
 
     return 0;
 }
