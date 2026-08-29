@@ -1,0 +1,35 @@
+name: STM32 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: build (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - STM32/lower_arm_servo
+          - STM32/upper_arm_servo
+          - STM32/robomas_controller
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi ninja-build
+
+      - name: Configure
+        working-directory: ${{ matrix.project }}
+        run: cmake --preset Release
+
+      - name: Build
+        working-directory: ${{ matrix.project }}
+        run: cmake --build --preset Release
