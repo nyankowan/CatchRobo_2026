@@ -63,7 +63,7 @@ int app_main(void) {
     micon_connection_init();
 
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
-    xTaskCreatePinnedToCore(main_task, "main_task", 3000, NULL, 1, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(main_task, "main_task", 4000, NULL, 1, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(dump_task, "dump_task", 5000, NULL, 1, NULL, APP_CPU_NUM);
     // Does not return.
     btstack_run_loop_execute();
