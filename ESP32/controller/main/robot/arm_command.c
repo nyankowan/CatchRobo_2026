@@ -50,6 +50,13 @@ static TickType_t upper_arm_homing_start_tick = 0;
 static TickType_t lower_arm_homing_request_sent_tick = 0;
 static TickType_t upper_arm_homing_request_sent_tick = 0;
 
+/*spaming 防止用*/
+static TickType_t send_lower_arm_error_loged_tick = 0;
+static TickType_t send_upper_arm_error_loged_tick = 0;
+static esp_err_t send_lower_arm_error = ESP_OK;
+static esp_err_t send_upper_arm_error = ESP_OK;
+#define PREVENT_SPAMING_MS 2000 //前回と同じエラー内容なら，この間隔で表示する．異なるエラーなら表示．
+
 #define HOMING_REQUEST_RETRY_MS 100 //ACKが届かない場合，この間隔でHOMING要求を再送する
 
 
@@ -103,12 +110,20 @@ esp_err_t send_lower_arm(){
         .id = CAN_ID_LOWER_ARM_COMMAND,
         .data.lower_arm = lower_arm,
     };
-    esp_err_t err = can_tx(&com);
+    
+    esp_err_t prev_send_lower_arm_error = send_lower_arm_error;
+    send_lower_arm_error = can_tx(&com);
 
-    if(err != ESP_OK){
+    if(send_lower_arm_error != ESP_OK){
+        
+        if( (send_lower_arm_error == prev_send_lower_arm_error) && 
+            (xTaskGetTickCount() - send_lower_arm_error_loged_tick < pdMS_TO_TICKS(PREVENT_SPAMING_MS)) ){
+            return send_lower_arm_error;
+        }
+        send_lower_arm_error_loged_tick = xTaskGetTickCount();
         ESP_LOGE(ARM_TAG, "CAN_ID_LOWER_ARM_COMMAND failed.");
     }
-    return err;
+    return send_lower_arm_error;
 }
 
 
@@ -119,12 +134,20 @@ esp_err_t send_upper_arm(){
         .id = CAN_ID_UPPER_ARM_COMMAND,
         .data.upper_arm = upper_arm,
     };
-    esp_err_t err = can_tx(&com);
 
-    if (err != ESP_OK) {
+    esp_err_t prev_send_upper_arm_error = send_upper_arm_error;
+    send_upper_arm_error = can_tx(&com);
+
+    if(send_upper_arm_error != ESP_OK){
+        
+        if( (send_upper_arm_error == prev_send_upper_arm_error) && 
+            (xTaskGetTickCount() - send_upper_arm_error_loged_tick < pdMS_TO_TICKS(PREVENT_SPAMING_MS)) ){
+            return send_upper_arm_error;
+        }
+        send_upper_arm_error_loged_tick = xTaskGetTickCount();
         ESP_LOGE(ARM_TAG, "CAN_ID_UPPER_ARM_COMMAND failed.");
     }
-    return err;
+    return send_upper_arm_error;
 }
 
 

@@ -36,6 +36,12 @@ struct uni_platform* get_my_platform(void);
 
 void main_task(void* arg);
 void dump_task(void* arg);
+void btstack_run_loop_task(void* arg);
+
+void btstack_run_loop_task(void* arg) {
+    (void)arg;
+    btstack_run_loop_execute();
+}
 
 int app_main(void) {
     // hci_dump_open(NULL, HCI_DUMP_STDOUT);
@@ -65,8 +71,7 @@ int app_main(void) {
     can_init_and_start(CAN_TX_GPIO, CAN_RX_GPIO);
     xTaskCreatePinnedToCore(main_task, "main_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(dump_task, "dump_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
-    // Does not return.
-    btstack_run_loop_execute();
+    xTaskCreatePinnedToCore(btstack_run_loop_task, "btstack_run_loop_task", 4096, NULL, 1, NULL, APP_CPU_NUM);
 
     return 0;
 }

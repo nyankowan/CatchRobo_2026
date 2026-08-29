@@ -7,6 +7,11 @@
 #include "freertos/task.h"
 
 #define CAN_TAG "CAN"
+
+#define DEFAULT_TX_GPIO 21
+#define DEFAULT_RX_GPIO 22
+
+#define CAN_ERROR_HANDLING_TASK_LOOP_MS 10
 typedef struct{
     can_rx_callback_t callback;
     can_id_t id;
@@ -17,6 +22,8 @@ static can_rx_callback_entry_t* find_callback(can_id_t id);
 static bool already_can_init_and_start = false;
 static int callback_entry_num = 0;
 static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NUM_ITEMS] = {0};
+/*prevent spaming error message*/
+static esp_err_t can_tx_error = ESP_OK;
 
 static volatile bool can_running = false;
 
@@ -34,39 +41,39 @@ esp_err_t can_tx(can_command_data_t *com_data){
         .identifier = com_data->id,
     };
     memcpy(msg.data, com_data->data.raw, sizeof(msg.data));
-    switch(twai_transmit(&msg, 0)){
+    esp_err_t prev_can_tx_error = can_tx_error;
+    can_tx_error = twai_transmit(&msg, 0);
+    if(can_tx_error == prev_can_tx_error)return can_tx_error;
+    switch(can_tx_error){
         case ESP_OK:
-            return ESP_OK;
+            break;
         case ESP_ERR_INVALID_ARG:
             ESP_LOGE(CAN_TAG, "Arguments is invalid.");
-            return ESP_ERR_INVALID_ARG;
+            break;
         case ESP_ERR_TIMEOUT:
+            //Prevent spaming error message.
             ESP_LOGE(CAN_TAG, "Timed out waiting for space on TX queue.");
-            return ESP_ERR_TIMEOUT;
+            break;
         case ESP_ERR_INVALID_STATE:
             ESP_LOGE(CAN_TAG, "Driver is not in running state, or is not installed.");
-            return ESP_ERR_INVALID_STATE;
+            break;
         case ESP_FAIL:
             ESP_LOGE(CAN_TAG, "TX queue is disabled and another message is currently transmitting.");
-            return ESP_FAIL;
+            break;
         case ESP_ERR_NOT_SUPPORTED:
             ESP_LOGE(CAN_TAG, "Listen Only Mode does not support transmissions.");
-            return ESP_ERR_NOT_SUPPORTED;
+            break;
     }
-    return ESP_FAIL;
+    return can_tx_error;
 }
 
-esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
-    if(already_can_init_and_start){
-        ESP_LOGE(CAN_TAG, "CAN has alerady init and start.");
-        return ESP_FAIL;
-    }
-      
+esp_err_t can_install_and_start(gpio_num_t tx, gpio_num_t rx){
     // TWAI初期化  
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(tx, rx, TWAI_MODE_NORMAL);  
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_1MBITS(); 
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     esp_err_t e;
+    ESP_LOGI(CAN_TAG, "CAN driver install.");
     e = twai_driver_install(&g_config, &t_config, &f_config);
     switch (e) {
         case ESP_ERR_NO_MEM:
@@ -76,18 +83,30 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
             ESP_LOGE(CAN_TAG, "CAN driver is already installed.");
             return e;
         default:
-            ESP_LOGV(CAN_TAG, "CAN driver installed successfully.");
+            ESP_LOGI(CAN_TAG, "CAN driver installed successfully.");
     }
-        
+    ESP_LOGI(CAN_TAG, "CAN start.");    
     e = twai_start();
     if(e){
         ESP_LOGE(CAN_TAG, "CAN is not stopped.");
         return e;
+    }else{
+        ESP_LOGI(CAN_TAG, "CAN started successfully.");
     }
-    already_can_init_and_start = true;
+    return ESP_OK;
+}
+
+esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
+    if(already_can_init_and_start){
+        ESP_LOGE(CAN_TAG, "CAN has alerady init and start.");
+        return ESP_FAIL;
+    }
+    esp_err_t e = can_install_and_start(tx,rx);
+    if(e)return e;
+    
     xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 3000, NULL, 5, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(can_rx_task, "can_rx_task", 3000, NULL, 4, NULL, APP_CPU_NUM);
-    
+    already_can_init_and_start = true;
     return ESP_OK;
     
 }
@@ -117,7 +136,6 @@ void can_rx_task(void *arg){
                 entry->callback(&data);
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -128,7 +146,13 @@ void can_error_handling_task(void *arg)
         if(twai_get_status_info(&s)){
             ESP_LOGE(CAN_TAG, "CAN is not installed.");
             can_running = false;
-            vTaskDelete(NULL);
+            ESP_LOGI(CAN_TAG, "CAN install default gpio: tx = %2d, rx = %2d", DEFAULT_TX_GPIO, DEFAULT_RX_GPIO);
+            if(can_install_and_start(DEFAULT_TX_GPIO, DEFAULT_RX_GPIO)){
+                ESP_LOGE(CAN_TAG, "CAN install default failed. Delete \"can_error_handling_task\".");
+                vTaskDelete(NULL);
+                vTaskDelay(pdMS_TO_TICKS(CAN_ERROR_HANDLING_TASK_LOOP_MS));
+                continue;
+            }
         }
         can_running = (s.state == TWAI_STATE_RUNNING);
         switch (s.state) {
@@ -151,7 +175,7 @@ void can_error_handling_task(void *arg)
                 break;
             default:
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(CAN_ERROR_HANDLING_TASK_LOOP_MS));
     }
 }
 
