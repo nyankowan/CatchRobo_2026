@@ -50,8 +50,9 @@ CONFIG_BTSTACK_AUDIO=n
 # Add here other options
 #
 
-#default 
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=3584
+#To prevent btstack_run_loop_execute from overflowing
+#defalut: 3584
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
 
 #for MS resolution 
 CONFIG_FREERTOS_HZ=1000
