@@ -13,7 +13,7 @@ void lower_arm_move(
     bool right_toggle, bool expand_toggle,
     bool shaft_rotate_toggle
 );
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
 
 esp_err_t send_lower_arm();
 esp_err_t send_upper_arm();
