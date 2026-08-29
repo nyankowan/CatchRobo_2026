@@ -9,10 +9,11 @@
 //homing中は動かない
 void lower_arm_move(
     int16_t dx, int16_t dy,
-    bool left_toggle, bool middle_toggle, 
-    bool right_toggle, bool expand_toggle
+    bool left_toggle, bool middle_toggle,
+    bool right_toggle, bool expand_toggle,
+    bool shaft_rotate_toggle
 );
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle);
 
 esp_err_t send_lower_arm();
 esp_err_t send_upper_arm();
