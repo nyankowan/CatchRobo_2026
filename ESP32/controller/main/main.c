@@ -131,14 +131,16 @@ void main_task(void* arg){
             PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
             PRESSED(lower_mypad.X, lower_prev_mypad.X),
             PRESSED(lower_mypad.A, lower_prev_mypad.A),
-            PRESSED(lower_mypad.B, lower_prev_mypad.B)
+            PRESSED(lower_mypad.B, lower_prev_mypad.B),
+            PRESSED(lower_mypad.L, lower_prev_mypad.L) || PRESSED(lower_mypad.R, lower_prev_mypad.R)
         );
         send_lower_arm();
 
         upper_arm_move(
             upper_mypad.RIGHT - upper_mypad.LEFT + upper_mypad.LX,
             upper_mypad.UP -    upper_mypad.DOWN + upper_mypad.LY,
-            upper_mypad.A -     upper_mypad.B
+            upper_mypad.A -     upper_mypad.B,
+            PRESSED(upper_mypad.L, upper_prev_mypad.L) || PRESSED(upper_mypad.R, upper_prev_mypad.R)
         );
         send_upper_arm();
 

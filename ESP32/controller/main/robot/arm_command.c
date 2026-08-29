@@ -30,6 +30,15 @@ static void upper_arm_homing_ack_notify(const can_data_t *data);
 static lower_arm_t lower_arm = {0};
 static upper_arm_t upper_arm = {0};
 
+/*
+ * シャフトの取り付け角度オフセット。
+ * L/Rボタンで90度トグルする。0のとき可動域は[DEG_MIN, DEG_MIN+DEG_RANGE]
+ * (基本は0~180度)，90のとき[DEG_MIN+90, DEG_MIN+90+DEG_RANGE](90~270度)。
+ */
+static double lower_arm_deg_offset = 0.0;
+static double upper_arm_deg_offset = 0.0;
+#define SHAFT_ROTATE_DEG 90.0
+
 static can_sequence_t upper_arm_homing_sequence = 0;
 static can_sequence_t lower_arm_homing_sequence = 0;
 
@@ -61,17 +70,21 @@ static esp_err_t send_upper_arm_error = ESP_OK;
 
 
 // homing中は動かない
-void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle, bool right_toggle, bool expand_toggle){
+void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle, bool right_toggle, bool expand_toggle, bool shaft_rotate_toggle){
     if(lower_arm_homing_in_progress)return;
+
+    if(shaft_rotate_toggle){TOGGLE(lower_arm_deg_offset, SHAFT_ROTATE_DEG);}
+
     direct_t d = {
         .x = lower_arm.x,
-        .y = lower_arm.y, 
+        .y = lower_arm.y,
     };
     d.x += dx;
     d.y += dy;
     polar_t p = to_polar(d);
-    if( LOWER_ARM_R_MIN <= p.r && p.r <= LOWER_ARM_R_MIN + LOWER_ARM_R_RANGE && 
-        LOWER_ARM_DEG_MIN <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE){
+    double deg_min = LOWER_ARM_DEG_MIN + lower_arm_deg_offset;
+    if( LOWER_ARM_R_MIN <= p.r && p.r <= LOWER_ARM_R_MIN + LOWER_ARM_R_RANGE &&
+        deg_min <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= deg_min + LOWER_ARM_DEG_RANGE){
         lower_arm.x = d.x;
         lower_arm.y = d.y;
     }
@@ -84,18 +97,21 @@ void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle,
 
 
 // homing中は動かない
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle){
     if (upper_arm_homing_in_progress)return;
+
+    if(shaft_rotate_toggle){TOGGLE(upper_arm_deg_offset, SHAFT_ROTATE_DEG);}
 
     direct_t d = {
         .x = upper_arm.x,
-        .y = upper_arm.y, 
+        .y = upper_arm.y,
     };
     d.x += dx;
     d.y += dy;
     polar_t p = to_polar(d);
-    if( UPPER_ARM_R_MIN <= p.r && p.r <= UPPER_ARM_R_MIN + UPPER_ARM_R_RANGE && 
-        UPPER_ARM_DEG_MIN <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= UPPER_ARM_DEG_MIN + UPPER_ARM_DEG_RANGE){
+    double deg_min = UPPER_ARM_DEG_MIN + upper_arm_deg_offset;
+    if( UPPER_ARM_R_MIN <= p.r && p.r <= UPPER_ARM_R_MIN + UPPER_ARM_R_RANGE &&
+        deg_min <= p.theta / (2*M_PI) * 360 && p.theta / (2*M_PI) * 360 <= deg_min + UPPER_ARM_DEG_RANGE){
         upper_arm.x = d.x;
         upper_arm.y = d.y;
     }
@@ -318,6 +334,7 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
     direct_t larm = LOWER_ARM_HOME_COORDINATE;
     lower_arm.x = larm.x;
     lower_arm.y = larm.y;
+    lower_arm_deg_offset = 0.0; // homingでシャフトは基準位置に戻るのでオフセットも解除する
 
     if (data->homing_sequence != lower_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG,"lower homing DONE sequence error: rx=%u expected=%u",
@@ -349,6 +366,7 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
     upper_arm.x = uarm.x;
     upper_arm.y = uarm.y;
+    upper_arm_deg_offset = 0.0; // homingでシャフトは基準位置に戻るのでオフセットも解除する
 
     if (data->homing_sequence != upper_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG, "upper homing DONE sequence error: rx=%u expected=%u",
@@ -468,12 +486,13 @@ void lower_arm_dump(){
     );
 
     logi(
-        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), "
+        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), shaft_offset %3.0f°, "
         "HAND{left %1d, middle %1d, right %d, expand %1d}\n",
         lower_arm.x,
         lower_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
+        lower_arm_deg_offset,
         lower_arm.left,
         lower_arm.middle,
         lower_arm.right,
@@ -491,11 +510,12 @@ void upper_arm_dump(){
     );
 
     logi(
-        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d\n",
+        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), shaft_offset %3.0f°, Z %d\n",
         upper_arm.x,
         upper_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
+        upper_arm_deg_offset,
         upper_arm.z
     );
 }
