@@ -25,6 +25,10 @@ static can_rx_callback_entry_t can_rx_callback_entry_register[CAN_ID_NUM_ITEMS] 
 /*prevent spaming error message*/
 static esp_err_t can_tx_error = ESP_OK;
 
+/* can_init_and_start()に渡された実際のGPIO。エラー復帰時の再インストールで使う。*/
+static gpio_num_t installed_tx_gpio = DEFAULT_TX_GPIO;
+static gpio_num_t installed_rx_gpio = DEFAULT_RX_GPIO;
+
 static volatile bool can_running = false;
 
 bool can_is_running(){
@@ -103,7 +107,9 @@ esp_err_t can_init_and_start(gpio_num_t tx, gpio_num_t rx){
     }
     esp_err_t e = can_install_and_start(tx,rx);
     if(e)return e;
-    
+    installed_tx_gpio = tx;
+    installed_rx_gpio = rx;
+
     xTaskCreatePinnedToCore(can_error_handling_task, "can_error_handling_task", 3000, NULL, 5, NULL, APP_CPU_NUM);
     xTaskCreatePinnedToCore(can_rx_task, "can_rx_task", 3000, NULL, 4, NULL, APP_CPU_NUM);
     already_can_init_and_start = true;
@@ -141,39 +147,59 @@ void can_rx_task(void *arg){
 
 void can_error_handling_task(void *arg)
 {
-    twai_status_info_t s;
+    twai_status_info_t s = {0};
     while (1) {
         if(twai_get_status_info(&s)){
+            // twai_get_status_info()がエラーを返した場合、sは更新されない(不定/前回値のまま)。
+            // そのままswitch(s.state)へ進むと不定動作になるため、再インストールを試みて
+            // 今回のループは打ち切り、次のループで状態を取得し直す。
             ESP_LOGW(CAN_TAG, "CAN is not installed.");
             can_running = false;
-            ESP_LOGI(CAN_TAG, "CAN install default gpio: tx = %2d, rx = %2d", DEFAULT_TX_GPIO, DEFAULT_RX_GPIO);
-            if(can_install_and_start(DEFAULT_TX_GPIO, DEFAULT_RX_GPIO)){
-                ESP_LOGE(CAN_TAG, "CAN install default failed. Delete \"can_error_handling_task\".");
-                vTaskDelete(NULL);
-                vTaskDelay(pdMS_TO_TICKS(CAN_ERROR_HANDLING_TASK_LOOP_MS));
-                continue;
+            ESP_LOGI(CAN_TAG, "CAN install gpio: tx = %2d, rx = %2d", installed_tx_gpio, installed_rx_gpio);
+            esp_err_t install_err = can_install_and_start(installed_tx_gpio, installed_rx_gpio);
+            if(install_err){
+                // 恒久的にタスクを終了すると以後一切復帰を試みなくなるため、
+                // タスクは終了させずにリトライを継続する。
+                ESP_LOGE(CAN_TAG, "CAN install failed (err=%d). Will retry.", install_err);
+            }else{
+                ESP_LOGI(CAN_TAG, "CAN installed successfully.");
             }
+            vTaskDelay(pdMS_TO_TICKS(CAN_ERROR_HANDLING_TASK_LOOP_MS));
+            continue;
         }
         can_running = (s.state == TWAI_STATE_RUNNING);
         switch (s.state) {
-            case TWAI_STATE_BUS_OFF:
+            case TWAI_STATE_BUS_OFF: {
                 ESP_LOGW(CAN_TAG, "BUS OFF");
-                twai_initiate_recovery();
-                ESP_LOGW(CAN_TAG, "CAN recovery.");
+                esp_err_t recovery_err = twai_initiate_recovery();
+                if(recovery_err == ESP_OK){
+                    ESP_LOGW(CAN_TAG, "CAN recovery initiated.");
+                }else if(recovery_err != ESP_ERR_INVALID_STATE){
+                    // ESP_ERR_INVALID_STATEは既にリカバリ中/RUNNING等への遷移中で、
+                    // 想定内のため警告のみに留める。それ以外は異常としてログ出力する。
+                    ESP_LOGE(CAN_TAG, "CAN recovery initiate failed (err=%d).", recovery_err);
+                }
                 vTaskDelay(pdMS_TO_TICKS(500));
                 break;
-            
-            case TWAI_STATE_STOPPED:
+            }
+
+            case TWAI_STATE_STOPPED: {
                 ESP_LOGW(CAN_TAG, "CAN STOPPED");
-                twai_start();
-                ESP_LOGE(CAN_TAG, "CAN start.");
+                esp_err_t start_err = twai_start();
+                if(start_err == ESP_OK){
+                    ESP_LOGI(CAN_TAG, "CAN start.");
+                }else{
+                    ESP_LOGE(CAN_TAG, "CAN start failed (err=%d).", start_err);
+                }
                 break;
-            
+            }
+
             case TWAI_STATE_RECOVERING:
                 ESP_LOGW(CAN_TAG, "CAN RECOVERING");
                 vTaskDelay(pdMS_TO_TICKS(500));
                 break;
             default:
+                break;
         }
         vTaskDelay(pdMS_TO_TICKS(CAN_ERROR_HANDLING_TASK_LOOP_MS));
     }
