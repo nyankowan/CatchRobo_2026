@@ -36,6 +36,8 @@
 #define SERVO_0   500
 #define SERVO_270 2500
 #define SERVO_DEG_RANGE 270 //サーボの角度(0-270deg)とパルス幅(SERVO_0-SERVO_270)の換算に使う定数
+
+#define STATUS_LED_BLINK_MS 200 //異常時のLED点滅間隔
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,7 +53,7 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t can_bus_error = 0; //CANバスエラーを検知したら立てる(一度立ったらラッチ)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,6 +128,7 @@ int main(void)
   }
   HAL_TIM_PWM_Start(&ASSEMBLE_htim, ASSEMBLE_TIM_CHANNEL);
   __HAL_TIM_SET_COMPARE(&ASSEMBLE_htim, ASSEMBLE_TIM_CHANNEL, SERVO_0);
+  uint32_t status_led_last_toggle = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -135,6 +138,24 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    //CANバスエラー(バスオフ/エラーパッシブ/エラーワーニング)を検知したらラッチする
+    if(__HAL_CAN_GET_FLAG(&hcan, CAN_FLAG_BOF) ||
+       __HAL_CAN_GET_FLAG(&hcan, CAN_FLAG_EPV) ||
+       __HAL_CAN_GET_FLAG(&hcan, CAN_FLAG_EWG)){
+      can_bus_error = 1;
+    }
+
+    if(can_bus_error){
+      //異常時: 点滅
+      uint32_t now = HAL_GetTick();
+      if(now - status_led_last_toggle >= STATUS_LED_BLINK_MS){
+        status_led_last_toggle = now;
+        HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
+      }
+    }else{
+      //正常動作中: 点灯
+      HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
+    }
   }
   /* USER CODE END 3 */
 }
@@ -368,8 +389,12 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  //初期化失敗などで動作不能になった場合: 割り込みが止まりHAL_GetTick()が進まないため，
+  //ソフトウェアループでLEDを点滅させる
   while (1)
   {
+    HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
+    for(volatile uint32_t i = 0; i < 400000; i++){}
   }
   /* USER CODE END Error_Handler_Debug */
 }
