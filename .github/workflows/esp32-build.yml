@@ -1,0 +1,50 @@
+name: ESP32 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: build (ESP32/controller)
+    runs-on: ubuntu-latest
+    # Same base image as ESP32/controller/.devcontainer/Dockerfile.
+    # Keep this in sync with the ESP-IDF version documented in the README.
+    container:
+      image: espressif/idf:v5.5.4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Bluepad32
+        uses: actions/cache@v4
+        with:
+          path: ~/.espressif/bluepad32
+          key: bluepad32-main-${{ runner.os }}
+
+      - name: Install Bluepad32
+        # components/procon depends on Bluepad32/BTstack, which are not
+        # vendored in this repo (see ESP32/controller/CMakeLists.txt /
+        # components/procon/CMakeLists.txt). Fetch them into the same
+        # location expected by a local dev setup: ~/.espressif/bluepad32
+        run: |
+          set -eu
+          BP32_DIR="$HOME/.espressif/bluepad32"
+          if [ ! -d "$BP32_DIR/.git" ]; then
+            rm -rf "$BP32_DIR"
+            git clone --recurse-submodules https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
+          fi
+          cd "$BP32_DIR/external/btstack/port/esp32"
+          # Installs BTstack as a component inside Bluepad32's own source
+          # tree (bluepad32/src/components), which is what
+          # EXTRA_COMPONENT_DIRS in this project's CMakeLists.txt expects.
+          IDF_PATH=../../../../src python3 integrate_btstack.py
+
+      - name: Build
+        working-directory: ESP32/controller
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32
+          idf.py build
