@@ -73,10 +73,13 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 
 
   switch (rx_header.StdId) {
-  case CAN_ID_ASSEMBLE_COMMAND:
+  case CAN_ID_ASSEMBLE_COMMAND: {
+    assemble_deg_t deg = rx_data.assemble_deg;
+    if(deg > ASSEMBLE_DEG_RANGE) deg = ASSEMBLE_DEG_RANGE;
     __HAL_TIM_SET_COMPARE(&ASSEMBLE_htim,ASSEMBLE_TIM_CHANNEL,
-      rx_data.assemble_deg/270 * (SERVO_270 - SERVO_0) + SERVO_0);
+      (uint16_t)((double)deg / ASSEMBLE_DEG_RANGE * (SERVO_270 - SERVO_0) + SERVO_0));
     break;
+  }
   default:
     break;
   }
