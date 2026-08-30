@@ -16,6 +16,7 @@ jobs:
           - STM32/lower_arm_servo
           - STM32/upper_arm_servo
           - STM32/robomas_controller
+          - STM32/assemble_servo
 
     steps:
       - name: Checkout
