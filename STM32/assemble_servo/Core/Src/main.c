@@ -35,6 +35,7 @@
 /* USER CODE BEGIN PD */
 #define SERVO_0   500
 #define SERVO_270 2500
+#define SERVO_DEG_RANGE 270 //サーボの角度(0-270deg)とパルス幅(SERVO_0-SERVO_270)の換算に使う定数
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -75,9 +76,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   switch (rx_header.StdId) {
   case CAN_ID_ASSEMBLE_COMMAND: {
     assemble_deg_t deg = rx_data.assemble_deg;
-    if(deg > ASSEMBLE_DEG_RANGE) deg = ASSEMBLE_DEG_RANGE;
+    if(deg > ASSEMBLE_DEG_RANGE) deg = ASSEMBLE_DEG_RANGE; //機構の可動域(0-90度)にクランプ
     __HAL_TIM_SET_COMPARE(&ASSEMBLE_htim,ASSEMBLE_TIM_CHANNEL,
-      (uint16_t)((double)deg / ASSEMBLE_DEG_RANGE * (SERVO_270 - SERVO_0) + SERVO_0));
+      (uint16_t)((double)deg / SERVO_DEG_RANGE * (SERVO_270 - SERVO_0) + SERVO_0));
     break;
   }
   default:
