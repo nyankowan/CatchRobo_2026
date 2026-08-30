@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "can_protocol.h"
+#include "stm_can.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -31,7 +33,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SERVO_0   500
+#define SERVO_270 2500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,7 +65,22 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+  CAN_RxHeaderTypeDef rx_header;
+  can_data_t rx_data = {0};
+  if(hcan->Instance != CAN)return;
+  if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
 
+
+  switch (rx_header.StdId) {
+  case CAN_ID_ASSEMBLE_COMMAND:
+    __HAL_TIM_SET_COMPARE(&ASSEMBLE_htim,ASSEMBLE_TIM_CHANNEL,
+      rx_data.assemble_deg/270 * (SERVO_270 - SERVO_0) + SERVO_0);
+    break;
+  default:
+    break;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -98,7 +116,12 @@ int main(void)
   MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_CAN_Start(&hcan);
+  if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+    Error_Handler();
+  }
+  HAL_TIM_PWM_Start(&ASSEMBLE_htim, ASSEMBLE_TIM_CHANNEL);
+  __HAL_TIM_SET_COMPARE(&ASSEMBLE_htim, ASSEMBLE_TIM_CHANNEL, SERVO_0);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -180,7 +203,24 @@ static void MX_CAN_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN_Init 2 */
+  CAN_FilterTypeDef filter;
 
+  filter.FilterBank = 0;
+  filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  filter.FilterScale = CAN_FILTERSCALE_32BIT;
+
+  /* 受信IDフィルター　全受信 */
+  filter.FilterIdHigh = 0x0000;
+  filter.FilterIdLow = 0x0000;
+  filter.FilterMaskIdHigh = 0x0000;
+  filter.FilterMaskIdLow = 0x0000;
+
+  filter.FilterFIFOAssignment = CAN_RX_FIFO0; //fifo(first-in first-out) = Queue
+  filter.FilterActivation = ENABLE;
+
+  if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
+      Error_Handler();
+  }
   /* USER CODE END CAN_Init 2 */
 
 }

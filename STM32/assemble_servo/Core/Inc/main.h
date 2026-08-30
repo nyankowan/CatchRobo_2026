@@ -75,7 +75,8 @@ void Error_Handler(void);
 #define ASSEMBLE_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+#define ASSEMBLE_htim htim3
+#define ASSEMBLE_TIM_CHANNEL TIM_CHANNEL_1
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

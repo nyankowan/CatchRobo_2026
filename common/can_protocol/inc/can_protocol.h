@@ -6,6 +6,8 @@
 #define HEARTBEAT_MS 300
 #define HEARTBEAT_TIMEOUT_MS 1000
 
+#define ASSEMBLE_DEG_RANGE 90
+
 #define CAN_DLC_MAX 8 //MAX
 #define CAN_DLC_INVALID (-1)
 
