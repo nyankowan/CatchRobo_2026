@@ -127,7 +127,7 @@ void main_task(void* arg){
         
         lower_arm_move(
             lower_mypad.RIGHT - lower_mypad.LEFT + lower_mypad.LX,
-            lower_mypad.UP -    lower_mypad.DOWN + lower_mypad.LY,
+            lower_mypad.UP -    lower_mypad.DOWN - lower_mypad.LY,
             PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
             PRESSED(lower_mypad.X, lower_prev_mypad.X),
             PRESSED(lower_mypad.A, lower_prev_mypad.A),
