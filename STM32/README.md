@@ -17,8 +17,11 @@ STM32/
 ├── lower_arm_servo/
 │   └── 下アームのハンド(Left/Middle/Right/Expand)とShaftサーボの制御
 │
-└── upper_arm_servo/
-    └── 上アームのShaft/Zサーボの制御
+├── upper_arm_servo/
+│   └── 上アームのShaft/Zサーボの制御(未実装，CubeMX生成のスケルトンのみ)
+│
+└── assemble_servo/
+    └── 整理機構(Assemble)のサーボ角度制御
 ```
 
 各プロジェクトの詳細は，それぞれのディレクトリ内のREADME.mdを参照．
@@ -57,6 +60,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     coordinate
 )
 ```
+
+`assemble_servo` は座標変換を使わず角度指令をそのままPWMに変換するだけなので，`coordinate` はリンクしていない(`stm_can` と `can_protocol` のみ)．
 
 `robomas_controller` のみ，ホーミングのタイムアウト・速度・可動域の定数を使うため，上記に加えて `common/arm` も追加でリンクしている．
 
