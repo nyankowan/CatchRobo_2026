@@ -224,13 +224,14 @@ typedef struct {
 
 `hand`は各bitを以下のように使用する．
 
-| Bit | Name     | Description |
-| --: | -------- | ----------- |
-|   0 | `left`   | Left hand   |
-|   1 | `middle` | Middle hand |
-|   2 | `right`  | Right hand  |
-|   3 | `expand` | Expand      |
-| 4-7 | Reserved | 使用しない       |
+| Bit | Name           | Description                  |
+| --: | -------------- | ----------------------------- |
+|   0 | `left`         | Left hand                     |
+|   1 | `middle`       | Middle hand                   |
+|   2 | `right`        | Right hand                    |
+|   3 | `expand`       | Expand                        |
+|   4 | `shaft_rotate` | 1:ハンドの向きを90度回転させる |
+| 5-7 | Reserved       | 使用しない                     |
 
 例えば，
 
@@ -258,11 +259,12 @@ typedef struct {
     union {
         uint8_t hand;
         struct {
-            uint8_t left   : 1;
-            uint8_t middle : 1;
-            uint8_t right  : 1;
-            uint8_t expand : 1;
-            uint8_t        : 4;
+            uint8_t left         : 1;
+            uint8_t middle       : 1;
+            uint8_t right        : 1;
+            uint8_t expand       : 1;
+            uint8_t shaft_rotate : 1;
+            uint8_t              : 3;
         };
     };
 } lower_arm_t;

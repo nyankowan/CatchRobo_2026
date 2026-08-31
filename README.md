@@ -28,14 +28,27 @@ CatchRobo_2026/
 │   │   └── 下側アームのサーボ制御
 │   │
 │   ├── upper_arm_servo/
-│   │   └── 上側アームのサーボ制御
+│   │   └── 上側アームのサーボ制御(未実装)
 │   │
-|   └── robomas_controller/
-│       └── 両アームのロボマス制御
+│   ├── robomas_controller/
+│   │   └── 両アームのロボマス制御
+│   │
+|   └── assemble_servo/
+│       └── 整理機構のサーボ制御
 │
 └── Kicad/
-    └── servo/
-        └── 回路図・基板設計データ
+    ├── ESP/
+    │   └── ESP Main Controller基板
+    ├── STM32F303K8_lower_arm_servo/
+    │   └── サーボ制御基板(lower_arm_servo/upper_arm_servo/assemble_servoで共用)
+    ├── STM32F446RE_robomas_controller/
+    │   └── ロボマス制御基板
+    ├── servo/
+    │   └── サーボ用補助基板
+    ├── library/
+    │   └── 共通シンボル・フットプリント
+    └── README.md
+        └── 部品リスト
 ```
 ## Hardware
 
@@ -127,6 +140,6 @@ idf.py flash
 
 #### Build
 ```bash
-cmake -B build
-cmake --build build
+cmake --preset Release
+cmake --build --preset Release
 ```

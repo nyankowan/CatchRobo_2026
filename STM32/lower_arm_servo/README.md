@@ -110,11 +110,8 @@ CAN RX0 interrupt -> Enable
 #include <math.h>
 ```
 
-```C
-/* USER CODE END WHILE */
-stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
-HAL_Delay(HEARTBEAT_MS);
-```
+Heartbeat送信の実装は非ブロッキング(`HAL_Delay(HEARTBEAT_MS)`のような待機はしない)．詳細は後述の[Heartbeat](#heartbeat)章を参照．
+
 ### PWM Start
 ```C
 /* USER CODE BEGIN 2 */
@@ -138,10 +135,12 @@ __HAL_TIM_SET_COMPARE(
 ### CAN
 ```C
 /* USER CODE BEGIN PV */
-/* USER CODE BEGIN PV */
 CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 ```
+
+`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．
+
 ```C
 /* USER CODE BEGIN 0 */
 
@@ -149,16 +148,39 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
 
-
   switch (rx_header.StdId) {
   case CAN_ID_LOWER_ARM_COMMAND:
+    lower_arm_left   = rx_data.lower_arm.left;
+    lower_arm_middle = rx_data.lower_arm.middle;
+    lower_arm_right  = rx_data.lower_arm.right;
+    lower_arm_expand = rx_data.lower_arm.expand;
 
+    if(rx_data.lower_arm.left)  {__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.right) {__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+
+    direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる
+    // (基本は0~180度動くシャフトを，90~270度で動くようにする)
+    double shaft_theta = to_polar(direct).theta;
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI_2;}
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
     break;
 
   case CAN_ID_LOWER_HOMING:
+    lower_arm_left = false;
+    lower_arm_middle = false;
+    lower_arm_right = false;
+    lower_arm_expand = false;
 
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
     break;
-  
+
 
   default:
     break;
@@ -170,6 +192,27 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 HAL_CAN_Start(&hcan);
 if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
   Error_Handler();
+}
+```
+
+### Heartbeat
+
+mainループ内で`HEARTBEAT_MS`(300ms，`common/can_protocol`で定義)周期ごとに`CAN_ID_LOWER_ARM_HEARTBEAT`を送信する．ESP32側はこれの受信有無でLower Arm Controllerとの通信生存を判定する(詳細は[common/can_protocol/README.md](../../common/can_protocol/README.md)のHeartbeat章参照)．
+
+```C
+/* USER CODE BEGIN WHILE */
+uint32_t last_heartbeat = HAL_GetTick();
+while (1)
+{
+  status_led_update();
+
+  if(HAL_GetTick() - last_heartbeat > HEARTBEAT_MS){
+    last_heartbeat = HAL_GetTick();
+    stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_LOWER_ARM_HEARTBEAT});
+  }
+  /* USER CODE END WHILE */
+  HAL_Delay(LOOP_MS);
+  /* USER CODE BEGIN 3 */
 }
 ```
 
@@ -217,7 +260,7 @@ Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)�
 
 実装は`status_led_state_t`によるステートマシン(`STATUS_LED_STATE_MARKER` → `..._CHANNEL_GAP` → `..._BLINK_ON`/`..._BLINK_GAP`(chごとに1〜2回) → `..._END_PAUSE` → 最初に戻る)．ONかOFFかで点滅回数が変わるため，固定長のフェーズ表ではなくこの状態機械で管理している．
 
-`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．
+`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．Shaftサーボも同時にSERVO_0へ戻す(Status_LEDの点滅表示には含まれない)．
 
 ```C
 /* USER CODE BEGIN 2 */

@@ -1,12 +1,19 @@
 # STM32/robomas_controller
-CAN1            CMMAND
-CAN2            ROBOMAS
-GPIO_Input_1
-GPIO_Input_2
-GPIO_Input_3
-GPIO_Input_4
-GPIO_Input_5
-GPIO_Input_6
+
+| 用途 | STM32ピン | CubeMX設定 |
+| :--- | :--- | :--- |
+| CAN1 (Main Controllerとの通信) | PA11/PA12 | COMMAND_CAN_RX/TX |
+| CAN2 (Robomasterとの通信) | PB12/PB13 | ROBOMAS_CAN_RX/TX |
+| Status_LED | PA5 | GPIO_Output |
+| Upper Arm R軸 リミットスイッチ | PC2 | GPIO_Input (UPPER_ARM_R_LIMIT) |
+| Upper Arm Deg軸 下限リミットスイッチ | PC3 | GPIO_Input (UPPER_ARM_DEG_UNDER_LIMIT) |
+| Upper Arm Deg軸 上限リミットスイッチ | PC4 | GPIO_Input (UPPER_ARM_DEG_OVER_LIMIT，未使用) |
+| Lower Arm R軸 リミットスイッチ | PC5 | GPIO_Input (LOWER_ARM_R_LIMIT) |
+| Lower Arm Deg軸 下限リミットスイッチ | PC10 | GPIO_Input (LOWER_ARM_DEG_UNDER_LIMIT) |
+| Lower Arm Deg軸 上限リミットスイッチ | PC11 | GPIO_Input (LOWER_ARM_DEG_OVER_LIMIT，未使用) |
+
+各軸の`_UNDER_LIMIT`(ホーミング方向のリミットスイッチ)のみソフトウェアで読み取っている(下記Homingシーケンス参照)．`_OVER_LIMIT`はハードウェアの可動域超過検知用の入力として定義されているのみで，現状のファームウェアからは読み取っていない．
+
 # 概要
 両アームのアーム長とアーム偏角をロボマスターにより制御する．
 
