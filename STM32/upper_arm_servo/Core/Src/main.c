@@ -27,6 +27,7 @@
 #include "arm.h"
 #include "stm_can.h"
 #include <math.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +41,11 @@
 #define SERVO_270 2500
 
 #define LOOP_MS 2
+
+// Status_LEDの点滅周期(ms)．通常時は低速点滅(ハートビート)，
+// 受信コマンドが可動域外でクランプされた場合は高速点滅に切り替えてエラーを知らせる
+#define STATUS_LED_BLINK_MS       500
+#define STATUS_LED_ERROR_BLINK_MS 100
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,6 +63,10 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+// 直近に受信したCAN_ID_UPPER_ARM_COMMANDでShaft/Zのパルス幅クランプが発生したか
+// (CAN受信割り込みとmainループ双方から参照するのでvolatile)
+static volatile bool range_error = false;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,6 +83,22 @@ static void MX_TIM3_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/**
+* @brief 計算したパルス幅を可動域(SERVO_0~SERVO_270)にクランプする．
+*        クランプが発生した場合はout_of_rangeをtrueにする(falseへは戻さない)．
+*/
+static uint32_t clamp_servo_pulse(double pulse, bool *out_of_range){
+  if(pulse < SERVO_0){
+    *out_of_range = true;
+    return SERVO_0;
+  }
+  if(pulse > SERVO_270){
+    *out_of_range = true;
+    return SERVO_270;
+  }
+  return (uint32_t)pulse;
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   can_data_t rx_data;
   CAN_RxHeaderTypeDef rx_header;
@@ -80,17 +106,22 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
 
   switch (rx_header.StdId) {
-  case CAN_ID_UPPER_ARM_COMMAND:
-
+  case CAN_ID_UPPER_ARM_COMMAND: {
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
     double shaft_theta = to_polar(direct).theta;
-    __HAL_TIM_SET_COMPARE(&Shaft_htim, Shaft_TIM_CHANNEL, shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Z_htim, Z_TIM_CHANNEL, rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0);
+    double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+    double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 
+    bool out_of_range = false;
+    __HAL_TIM_SET_COMPARE(&Shaft_htim, Shaft_TIM_CHANNEL, clamp_servo_pulse(shaft_pulse, &out_of_range));
+    __HAL_TIM_SET_COMPARE(&Z_htim, Z_TIM_CHANNEL, clamp_servo_pulse(z_pulse, &out_of_range));
+    range_error = out_of_range;
 
     break;
+  }
 
   case CAN_ID_UPPER_HOMING:
+    // Zは現在位置を維持し，Shaftのみ原点へ戻す
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
     break;
 
@@ -99,12 +130,23 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   }
 }
 
+/**
+* @brief Status_LEDを周期的(mainループ毎)に呼び出して非ブロッキングに点滅させる．
+*        通常時はSTATUS_LED_BLINK_MS周期のハートビート，range_errorがtrueの間は
+*        STATUS_LED_ERROR_BLINK_MS周期の高速点滅に切り替えてエラーを知らせる．
+*/
 void status_led_update(){
-//ToDo
-HAL_GPIO_TogglePin(
-    STATUS_LED_GPIO_Port,
-    STATUS_LED_Pin
-);
+  static uint32_t last_toggle = 0;
+  uint32_t now = HAL_GetTick();
+  uint32_t interval = range_error ? STATUS_LED_ERROR_BLINK_MS : STATUS_LED_BLINK_MS;
+
+  if(now - last_toggle >= interval){
+    last_toggle = now;
+    HAL_GPIO_TogglePin(
+        STATUS_LED_GPIO_Port,
+        STATUS_LED_Pin
+    );
+  }
 }
 /* USER CODE END 0 */
 
