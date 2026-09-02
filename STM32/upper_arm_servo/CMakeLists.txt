@@ -37,6 +37,31 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+# STM32共通CAN
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../common/can"
+    "${CMAKE_BINARY_DIR}/stm_can"
+)
+
+# ESP32 / STM32共通 CAN protocol
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../../common/can_protocol"
+    "${CMAKE_BINARY_DIR}/can_protocol"
+)
+
+# ESP32 / STM32共通 座標処理
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../../common/coordinate"
+    "${CMAKE_BINARY_DIR}/coordinate"
+)
+
+# ESP32 / STM32共通 アームパラメータ
+add_subdirectory(
+    "${CMAKE_CURRENT_LIST_DIR}/../../common/arm"
+    "${CMAKE_BINARY_DIR}/arm"
+)
+
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -65,4 +90,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    stm_can
+    can_protocol
+    coordinate
+    arm
 )

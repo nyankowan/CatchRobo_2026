@@ -22,6 +22,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "can_protocol.h"
+#include "coordinate.h"
+#include "arm.h"
+#include "stm_can.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +36,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SERVO_0   500
+#define SERVO_270 2500
 
+#define LOOP_MS 2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,6 +73,39 @@ static void MX_TIM3_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+  can_data_t rx_data;
+  CAN_RxHeaderTypeDef rx_header;
+  if(hcan->Instance != CAN)return;
+  if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
+
+  switch (rx_header.StdId) {
+  case CAN_ID_UPPER_ARM_COMMAND:
+
+    direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
+    double shaft_theta = to_polar(direct).theta;
+    __HAL_TIM_SET_COMPARE(&Shaft_htim, Shaft_TIM_CHANNEL, shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Z_htim, Z_TIM_CHANNEL, rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0);
+
+
+    break;
+
+  case CAN_ID_UPPER_HOMING:
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    break;
+
+  default:
+    break;
+  }
+}
+
+void status_led_update(){
+//ToDo
+HAL_GPIO_TogglePin(
+    STATUS_LED_GPIO_Port,
+    STATUS_LED_Pin
+);
+}
 /* USER CODE END 0 */
 
 /**
@@ -102,14 +143,29 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_TIM_PWM_Start(&htim1, Shaft_TIM_CHANNEL);
+  HAL_TIM_PWM_Start(&htim3, Z_TIM_CHANNEL);
+
+  HAL_CAN_Start(&hcan);
+  if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t last_heartbeat = HAL_GetTick();
   while (1)
   {
+    status_led_update();
+
+    if(HAL_GetTick() - last_heartbeat > HEARTBEAT_MS){
+      last_heartbeat = HAL_GetTick();
+      stm_can_send(&hcan, &(can_command_data_t){.id = CAN_ID_UPPER_ARM_HEARTBEAT});
+    }
     /* USER CODE END WHILE */
 
+    HAL_Delay(LOOP_MS);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -191,6 +247,24 @@ static void MX_CAN_Init(void)
   }
   /* USER CODE BEGIN CAN_Init 2 */
 
+  CAN_FilterTypeDef filter;
+
+  filter.FilterBank = 0;
+  filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  filter.FilterScale = CAN_FILTERSCALE_32BIT;
+
+  /* 受信IDフィルター　全受信 */
+  filter.FilterIdHigh = 0x0000;
+  filter.FilterIdLow = 0x0000;
+  filter.FilterMaskIdHigh = 0x0000;
+  filter.FilterMaskIdLow = 0x0000;
+
+  filter.FilterFIFOAssignment = CAN_RX_FIFO0; //fifo(first-in first-out) = Queue
+  filter.FilterActivation = ENABLE;
+
+  if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
+      Error_Handler();
+  }
   /* USER CODE END CAN_Init 2 */
 
 }
@@ -420,6 +494,11 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+    HAL_GPIO_TogglePin(
+    STATUS_LED_GPIO_Port,
+    STATUS_LED_Pin
+    );
+    HAL_Delay(1000);
   }
   /* USER CODE END Error_Handler_Debug */
 }
