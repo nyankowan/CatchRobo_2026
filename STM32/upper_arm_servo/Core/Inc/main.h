@@ -82,8 +82,10 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 #define Shaft_htim htim1
+#define Z_htim htim3
 
 #define Shaft_TIM_CHANNEL TIM_CHANNEL_1
+#define Z_TIM_CHANNEL TIM_CHANNEL_4
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
