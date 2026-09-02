@@ -62,7 +62,24 @@ static uni_error_t my_platform_on_device_discovered(bd_addr_t addr, const char* 
         return UNI_ERROR_IGNORE_DEVICE;
     }
 
-    return UNI_ERROR_SUCCESS;
+    //98:B6:8D:D0:3E:17
+    //98:B6:E9:2A:E0:EE
+    //98:B6:E9:CF:0B:98
+    #define PROCON_LIST_NUM 3
+    const bd_addr_t proconlist[PROCON_LIST_NUM] = {
+        {0x98, 0xB6, 0x8D, 0xD0, 0x3E, 0x17},
+        {0x98, 0xB6, 0xE9, 0x2A, 0xE0, 0xEE},
+        {0x98, 0xB6, 0xE9, 0xCF, 0x0B, 0x98},
+    };
+
+    for(int i = 0; i < PROCON_LIST_NUM; i++){
+        if(bd_addr_cmp(addr, proconlist[i]) == 0){
+            return UNI_ERROR_SUCCESS;
+        }
+    }
+
+    logi("Ignoring not listed Pro Controller device\n");
+    return UNI_ERROR_IGNORE_DEVICE;
 }
 
 static void my_platform_on_device_connected(uni_hid_device_t* d) {
