@@ -5,7 +5,8 @@
 #define UPPER_ARM_DEG_MIN 0.0     //偏角の下限
 
 #define UPPER_ARM_Z_SERVO_GEAR_DIAMETER 80  //mm
-#define UPPER_ARM_Z_RANGE 174               //mm
+#define UPPER_ARM_Z_MIN 0.0                 //Zの下限(mm)
+#define UPPER_ARM_Z_RANGE 174                //Zの可動域(mm)
 
 #define LOWER_ARM_R_RANGE 830.0   //ToDo: 下側アームのアーム長可動域(mm)
 #define LOWER_ARM_R_MIN 200.0     //ToDo: アーム長を一番短くしたときのR(mm)を測る

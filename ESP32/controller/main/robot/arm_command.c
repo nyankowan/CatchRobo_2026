@@ -100,7 +100,13 @@ void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
         upper_arm.x = d.x;
         upper_arm.y = d.y;
     }
-    upper_arm.z += dz;
+
+    // int32_tで加算してからクランプする(int16_tのまま加算し続けるとオーバーフローで
+    // 値が反転し，Zサーボへ急激な指令が飛ぶ恐れがあるため)
+    int32_t z = (int32_t)upper_arm.z + dz;
+    if(z < UPPER_ARM_Z_MIN) z = UPPER_ARM_Z_MIN;
+    if(z > UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE) z = UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE;
+    upper_arm.z = (int16_t)z;
 }
 
 
