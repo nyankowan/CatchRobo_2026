@@ -63,10 +63,10 @@ void Error_Handler(void);
 #define MCO_GPIO_Port GPIOF
 #define VCP_TX_Pin GPIO_PIN_2
 #define VCP_TX_GPIO_Port GPIOA
+#define Z_Pin GPIO_PIN_1
+#define Z_GPIO_Port GPIOB
 #define Shaft_Pin GPIO_PIN_8
 #define Shaft_GPIO_Port GPIOA
-#define Z_Pin GPIO_PIN_9
-#define Z_GPIO_Port GPIOA
 #define CAN_RX_Pin GPIO_PIN_11
 #define CAN_RX_GPIO_Port GPIOA
 #define CAN_TX_Pin GPIO_PIN_12
@@ -81,7 +81,9 @@ void Error_Handler(void);
 #define STATUS_LED_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define Shaft_htim htim1
 
+#define Shaft_TIM_CHANNEL TIM_CHANNEL_1
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
