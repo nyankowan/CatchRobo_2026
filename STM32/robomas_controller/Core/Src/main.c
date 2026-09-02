@@ -736,9 +736,14 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  for(int i = 0; i < ROBOMAS_NUM; i++){
-    while(!robomas[i].feedback.initialized){HAL_Delay(1);}
-  }
+  // ここで全ROBOMAS_NUM分のフィードバックを待つと，一部のロボマスターしか
+  // 接続していない状態(例: 動作確認で下アームの2台のみ接続)ではメインループに
+  // 一切到達できず，接続済みのロボマスターについても
+  // 制御・Heartbeat送信・Status_LED表示等が何も行われない(＝外から見て
+  // 「ロボマスがつながっているのにフィードバックを受け取れない」ように見える)．
+  // 未接続の軸はrobomas_update()のROBOMAS_FEEDBACK_TIMEOUT_MSタイムアウトにより
+  // 自動的にROBOMAS_ERRORへ遷移しCAN_ID_ERROR_CODEで通知されるので，
+  // ここで全台の初期化を待つ必要はない．
 
   for(int i = 0; i < ROBOMAS_NUM; i++){
     pid_reset(&robomas[i].rpm_pid);
