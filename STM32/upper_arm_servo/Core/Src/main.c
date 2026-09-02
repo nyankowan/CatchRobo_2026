@@ -25,6 +25,7 @@
 #include "can_protocol.h"
 #include "coordinate.h"
 #include "arm.h"
+#include "stm32f3xx_hal_gpio.h"
 #include "stm_can.h"
 #include <math.h>
 #include <stdbool.h>
@@ -42,9 +43,7 @@
 
 #define LOOP_MS 2
 
-// Status_LEDの点滅周期(ms)．通常時は低速点滅(ハートビート)，
 // 受信コマンドが可動域外でクランプされた場合は高速点滅に切り替えてエラーを知らせる
-#define STATUS_LED_BLINK_MS       500
 #define STATUS_LED_ERROR_BLINK_MS 100
 /* USER CODE END PD */
 
@@ -138,9 +137,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 void status_led_update(){
   static uint32_t last_toggle = 0;
   uint32_t now = HAL_GetTick();
-  uint32_t interval = range_error ? STATUS_LED_ERROR_BLINK_MS : STATUS_LED_BLINK_MS;
-
-  if(now - last_toggle >= interval){
+  uint32_t interval = range_error ? STATUS_LED_ERROR_BLINK_MS : 0;
+  if(interval == 0){
+    HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
+  }else if(now - last_toggle >= interval){
     last_toggle = now;
     HAL_GPIO_TogglePin(
         STATUS_LED_GPIO_Port,
