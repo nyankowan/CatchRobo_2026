@@ -77,9 +77,11 @@ typedef struct{
 }pid_t;
 
 /**
+* @param ROBOMAS_INITAL, // 何もトルクを送らない状態
 * @param ROBOMAS_HOMING, // 速度制御によって，リミットスイッチ位置まで回転する
 * @param ROBOMAS_IDLE,   // ホーミング終了による他のホーミングを待機
 * @param ROBOMAS_READY,  // ユーザが制御可能な状態
+* @param ROBOMAS_ERROR,  // フィードバックを受け取れず，制御不能な状態
  */
 typedef enum{
   ROBOMAS_INITIAL,  // 初回起動時状態
@@ -89,6 +91,15 @@ typedef enum{
   ROBOMAS_ERROR,    // 制御不能状態
 }robomas_state_t;
 
+/**
+* @param robomas_feedback_t feedback
+* @param pid_t rpm_pid   モーターrpmの制御 
+* @param pid_t ang_pid   モーター角(resolution 8192)の制御 
+* @param robomas_state_t state     ロボマス制御状態
+* @param in32_t total_angle_home 極座標の原点に対応するモーター角(一周あたりの解像度 8192)
+* @param int16_t tx_torque     ロボマスへ送るトルク値
+* @param double gear_ratio    遊星軸/モーター軸 ギア比
+*/
 typedef struct{
   robomas_feedback_t feedback;
   pid_t rpm_pid;  //モーターrpmの制御
@@ -96,6 +107,7 @@ typedef struct{
   robomas_state_t state;
   int32_t total_angle_home;//極座標の原点に対応するモーター角(一周あたりの解像度 8192)
   int16_t tx_torque;
+  double gear_ratio;  // 遊星軸/モーター軸 ギア比
 
 }robomas_t;
 
@@ -138,6 +150,9 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_NUM 4
 
 #define ROBOMAS_MAX_TORQUE 16384 //ロボマスに送れる最大電流値
+#define ROBOMAS_M3_GEAR_RATIO (3591.0 / 187.0)//M3508
+#define ROBOMAS_M2_GEAR_RATIO 36              //M2006
+#define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
 #define ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
 #define ARM_R_ROBOMAS_DIRECTION -1 //アームが伸びる方向が正でモーター右ねじ正
@@ -156,9 +171,6 @@ uint32_t status_led_phase_start;
 
 #define UPPER_ARM_R_LIMIT_ON (HAL_GPIO_ReadPin(UPPER_ARM_R_LIMIT_GPIO_Port, UPPER_ARM_R_LIMIT_Pin) == GPIO_PIN_RESET)
 #define UPPER_ARM_R_LIMIT_OFF !UPPER_ARM_R_LIMIT_ON
-
-#define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
-
 
 /* USER CODE END PD */
 
@@ -179,17 +191,33 @@ direct_t coordinate[ARM_NUM] = {LOWER_ARM_HOME_COORDINATE, UPPER_ARM_HOME_COORDI
 #define coordinate_upper coordinate[1]
 
 robomas_t robomas[ROBOMAS_NUM] = {
-  {.state = ROBOMAS_INITIAL, .rpm_pid = {
+  { .state = ROBOMAS_INITIAL,
+    .gear_ratio = ROBOMAS_M3_GEAR_RATIO,
+    .rpm_pid = {
     .p = 10, .i = 0, .d = 0,
+  }, .ang_pid = {
+    .p = 0.1, .i = 0, .d = 0,
   }},
-  {.state = ROBOMAS_INITIAL, .rpm_pid = {
+  { .state = ROBOMAS_INITIAL,
+    .gear_ratio = ROBOMAS_M3_GEAR_RATIO,
+    .rpm_pid = {
     .p = 10, .i = 0, .d = 0,
+  }, .ang_pid = {
+    .p = 0.1, .i = 0, .d = 0,
   }},
-  {.state = ROBOMAS_INITIAL, .rpm_pid = {
+  { .state = ROBOMAS_INITIAL,
+    .gear_ratio = ROBOMAS_M3_GEAR_RATIO,
+    .rpm_pid = {
     .p = 10, .i = 0, .d = 0,
+  }, .ang_pid = {
+    .p = 0.1, .i = 0, .d = 0,
   }},
-  {.state = ROBOMAS_INITIAL, .rpm_pid = {
+  { .state = ROBOMAS_INITIAL,
+    .gear_ratio = ROBOMAS_M3_GEAR_RATIO,
+    .rpm_pid = {
     .p = 10, .i = 0, .d = 0,
+  }, .ang_pid = {
+    .p = 0.1, .i = 0, .d = 0,
   }},
 };
 #define robomas_lower_deg robomas[0]
@@ -558,13 +586,13 @@ double get_r(robomas_t *rb)
 */
 robomas_t *set_robomas_homing_rpm(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM;
+    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM;
+    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
-    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM;
+    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
-    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_UPPER_R_RPM;
+    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_UPPER_R_RPM * rb->gear_ratio;
   }else{return NULL;}
   return rb;
 }
@@ -574,13 +602,13 @@ robomas_t *set_robomas_homing_rpm(robomas_t *rb){
 **/
 robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION;
+    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
-    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION;
+    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
-    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else{return NULL;}
   return rb;
 }
