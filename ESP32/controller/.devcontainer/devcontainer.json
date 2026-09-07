@@ -3,6 +3,17 @@
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
+	// ESP32/controller/CMakeLists.txt reaches outside this folder
+	// (../../common), so mount the whole repository instead of just this
+	// folder, and default the editor into ESP32/controller for convenience.
+	"workspaceMount": "source=${localWorkspaceFolder}/../..,target=/workspaces/CatchRobo_2026,type=bind,consistency=cached",
+	"workspaceFolder": "/workspaces/CatchRobo_2026/ESP32/controller",
+	// Cache ~/.espressif (Bluepad32 clone) across container rebuilds instead
+	// of re-cloning every time.
+	"mounts": [
+		"source=catchrobo-esp32-espressif-cache,target=/root/.espressif,type=volume"
+	],
+	"postCreateCommand": "git config --global --add safe.directory /workspaces/CatchRobo_2026 && bash .devcontainer/setup-bluepad32.sh",
 	"customizations": {
 		"vscode": {
 			"settings": {

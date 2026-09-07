@@ -1,4 +1,7 @@
-ARG DOCKER_TAG=latest
+# Pin to the same ESP-IDF version as .github/workflows/esp32-build.yml and
+# the README ("ESP-IDF v5.5.4"). Bluepad32 does not yet document/guarantee
+# support for ESP-IDF v6+, so do not default this to "latest".
+ARG DOCKER_TAG=v5.5.4
 FROM espressif/idf:${DOCKER_TAG}
 
 ENV LC_ALL=C.UTF-8
