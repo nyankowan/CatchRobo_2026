@@ -18,7 +18,21 @@
 		"vscode": {
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash",
-				"idf.gitPath": "/usr/bin/git"
+				"idf.gitPath": "/usr/bin/git",
+				// The mount above brings in the whole repo (STM32/, Kicad/),
+				// not just ESP32/controller. Keep VS Code from watching /
+				// indexing those on this container — cheap to skip, and on
+				// Windows+Docker Desktop each watched bind-mounted file adds
+				// real overhead.
+				"files.watcherExclude": {
+					"**/STM32/**": true,
+					"**/Kicad/**": true,
+					"**/build/**": true
+				},
+				"search.exclude": {
+					"**/STM32/**": true,
+					"**/Kicad/**": true
+				}
 			},
 			"extensions": [
 				"espressif.esp-idf-extension",
