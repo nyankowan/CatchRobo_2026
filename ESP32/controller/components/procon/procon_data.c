@@ -29,12 +29,12 @@ const mypad_t EMPTY_MYPAD = {
 };
 
 void mypad_dump(mypad_t* pad) {
-    logi("A:  %d, B:    %d, X:    %d, Y:     %d\n\\
-          UP: %d, DOWN: %d, LEFT: %d, RIGHT: %d\n\\
-          L:  %d, R:    %d, ZL:   %d, ZR:    %d, TL: %d, TR: %d\n\\
-          MINUS: %d, PLUS: %d, HOME: %d, CAPTURE: %d\n\\
-          LX: %d, LY:   %d, RX:   %d, RY:    %d\n\\
-          battery: %3d, connected: %d\n",
+    logi("A:  %d, B:    %d, X:    %d, Y:     %d\n"
+         "UP: %d, DOWN: %d, LEFT: %d, RIGHT: %d\n"
+         "L:  %d, R:    %d, ZL:   %d, ZR:    %d, TL: %d, TR: %d\n"
+         "MINUS: %d, PLUS: %d, HOME: %d, CAPTURE: %d\n"
+         "LX: %d, LY:   %d, RX:   %d, RY:    %d\n"
+         "battery: %3d, connected: %d\n",
         pad->A, pad->B, pad->X, pad->Y, 
         pad->UP, pad->DOWN, pad->LEFT, pad->RIGHT, 
         pad->L, pad->R, pad->ZL, pad->ZR, pad->TL, pad->TR, 

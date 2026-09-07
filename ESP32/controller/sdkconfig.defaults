@@ -53,6 +53,6 @@ CONFIG_BTSTACK_AUDIO=n
 #for MS resolution 
 CONFIG_FREERTOS_HZ=1000
 
-#for use legacy timer group driver "driver/timer.h"
-#newer "driver/gptimer.h"
-CONFIG_GPTIMER_SUPPRESS_DEPRECATE_WARN=n
+#bluepad32's uni_mouse_quadrature.c still uses the legacy timer group driver "driver/timer.h"
+#newer "driver/gptimer.h"; suppress its deprecation #warning since we don't control that vendored code
+CONFIG_GPTIMER_SUPPRESS_DEPRECATE_WARN=y
