@@ -7,7 +7,11 @@
 set -eu
 
 BP32_DIR="$HOME/.espressif/bluepad32"
-if [ ! -d "$BP32_DIR/.git" ]; then
+# Re-clone if missing, or if a previous attempt left an incomplete checkout
+# in the cached ~/.espressif volume (e.g. interrupted by a network error
+# partway through, or a submodule fetch failure) — checking ".git" alone
+# isn't enough to prove the clone actually finished.
+if [ ! -d "$BP32_DIR/.git" ] || [ ! -d "$BP32_DIR/src/components" ]; then
 	rm -rf "$BP32_DIR"
 	git clone --recurse-submodules https://github.com/ricardoquesada/bluepad32.git "$BP32_DIR"
 fi
@@ -17,3 +21,5 @@ cd "$BP32_DIR/external/btstack/port/esp32"
 # (bluepad32/src/components), which is what EXTRA_COMPONENT_DIRS in
 # ESP32/controller/CMakeLists.txt expects.
 IDF_PATH=../../../../src python3 integrate_btstack.py
+
+echo "Bluepad32 ready at $BP32_DIR"
