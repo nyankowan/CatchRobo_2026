@@ -143,3 +143,18 @@ idf.py flash
 cmake --preset Release
 cmake --build --preset Release
 ```
+
+## Dev Container (Docker)
+
+ESP-IDF拡張とSTM32系拡張は同じVS Codeウィンドウで有効になっていると干渉するため，用途別にDev Container(Docker)を分けている．必要な拡張機能だけがコンテナ内にインストールされるので，都度手動で拡張をオン/オフする必要がない．
+
+| フォルダを開く | 使うコンテナ | 有効になる拡張 |
+| :--- | :--- | :--- |
+| `ESP32/controller` | `ESP32/controller/.devcontainer` | ESP-IDF |
+| `STM32` | `STM32/.devcontainer` | clangd, CMake Tools, Cortex-Debug |
+
+使い方: 対象のフォルダ(リポジトリ全体ではなく上表のフォルダ)を`File > Open Folder...`で開き，コマンドパレットから`Dev Containers: Reopen in Container`を実行する．どちらのコンテナも各プロジェクトが参照する`common/`(リポジトリ直下)を含むリポジトリ全体をマウントしたうえで，開いたフォルダをエディタ上のワークスペースフォルダとして表示する．
+
+`STM32/.devcontainer`は`lower_arm_servo`/`upper_arm_servo`/`robomas_controller`/`assemble_servo`の4プロジェクト共通で，どのプロジェクトも同じコンテナ内でビルドできる(各プロジェクトのディレクトリに`cd`して上記の`cmake --preset`コマンドを実行)．
+
+ST-Link/シリアルポート経由でのフラッシュ・デバッグにはUSBデバイスをコンテナに渡す必要があり，Linuxホスト以外(Windows/macOS)では別途パススルー設定が必要な場合がある．
