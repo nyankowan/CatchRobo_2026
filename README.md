@@ -157,4 +157,6 @@ ESP-IDF拡張とSTM32系拡張は同じVS Codeウィンドウで有効になっ�
 
 `STM32/.devcontainer`は`lower_arm_servo`/`upper_arm_servo`/`robomas_controller`/`assemble_servo`の4プロジェクト共通で，どのプロジェクトも同じコンテナ内でビルドできる(各プロジェクトのディレクトリに`cd`して上記の`cmake --preset`コマンドを実行)．
 
+`ESP32/controller/.devcontainer`はコンテナ作成時に`components/procon`が依存するBluepad32/BTstack(`~/.espressif/bluepad32`)を自動で取得する(`esp32-build.yml`と同じ手順)．取得結果はDockerボリュームにキャッシュされるため，コンテナを再作成しても毎回cloneし直すことはない．
+
 ST-Link/シリアルポート経由でのフラッシュ・デバッグにはUSBデバイスをコンテナに渡す必要があり，Linuxホスト以外(Windows/macOS)では別途パススルー設定が必要な場合がある．
