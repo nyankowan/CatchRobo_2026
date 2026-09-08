@@ -82,6 +82,7 @@ int app_main(void) {
 #define DUMP_TASK_LOOP_MS 2000
 #define GET_MYPAD_WAIT_MS 2000
 
+#define STICK_SCALE 128
 void dump_task(void* arg){
     mypad_t mp[MAX_MYPAD] = {0};
     while(1){
@@ -126,8 +127,8 @@ void main_task(void* arg){
         led_set_level(STATUS_LED_GPIO, status_led_state);
         
         lower_arm_move(
-            lower_mypad.RIGHT - lower_mypad.LEFT + lower_mypad.LX,
-            lower_mypad.UP -    lower_mypad.DOWN - lower_mypad.LY,
+            lower_mypad.RIGHT - lower_mypad.LEFT + lower_mypad.LX/STICK_SCALE,
+            lower_mypad.UP -    lower_mypad.DOWN - lower_mypad.LY/STICK_SCALE,
             PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
             PRESSED(lower_mypad.X, lower_prev_mypad.X),
             PRESSED(lower_mypad.A, lower_prev_mypad.A),
