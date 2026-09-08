@@ -155,7 +155,7 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
 #define ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
-#define ARM_R_ROBOMAS_DIRECTION -1 //アームが伸びる方向が正でモーター右ねじ正
+#define ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
 
 
 //ToDo: pullupしているので，導通したらRESET，していないならSETになる．リミットスイッチの接続によって変える．
