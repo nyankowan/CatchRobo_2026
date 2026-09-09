@@ -4,8 +4,6 @@
 #include <string.h>
 #include "procon_data.h"
 #include <uni.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #define PRO_CONTROLLER_COD 0b0010010100001000//cod=0x00002508
 
@@ -132,10 +130,9 @@ static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t
         //各プレイヤーの入力からmypadに翻訳
         uni_gamepad_remap(gp);
         convert_gp(gp, &mypad[player]);
+        mypad[player].last_update = xTaskGetTickCount();
+        mypad[player].connected = 1;
         mypad[player].battery_level = ctl->battery;
-        // printf("player %d: ",player);
-        // controller_dump(&mypad[player]);
-        // printf("\n");
     }  
 }
 
@@ -190,12 +187,24 @@ void convert_gp(uni_gamepad_t *gp, mypad_t *mp){
     mp->LY = gp->axis_y;
     mp->RX = gp->axis_rx;
     mp->RY = gp->axis_ry;
-
-    mp->connected = 1;
 }
 
 void get_mypad(mypad_t mp[MAX_MYPAD]){
     for(int i = 0; i<MAX_MYPAD; i++){
+        if (controllers[i] != NULL &&
+            mypad[i].connected && 
+            xTaskGetTickCount() - mypad[i].last_update > pdMS_TO_TICKS(MYPAD_TIMEOUT_MS)){
+            
+            logi("Controller %d timed out, diconnecting.\n", i);
+            int idx = uni_hid_device_get_idx_for_instance(controllers[i]);
+            uni_bt_disconnect_device_safe(idx); //切断処理をスケジューリング(非同期)
+
+            //切断処理は非同期に呼ばれるため，mypadは即座に切断状態にする．
+            //mainスレッドとBTスレッドどちらもmypad,controllersへの書き込みをすることになるので，排他制御を追加する必要がある．
+            mypad[i] = EMPTY_MYPAD;
+            controllers[i] = NULL;
+        }
         mp[i] = mypad[i];
+        
     }
 }

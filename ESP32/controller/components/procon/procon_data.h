@@ -4,7 +4,12 @@
 #include <stdint.h>
 #include "sdkconfig.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #define MAX_MYPAD CONFIG_BLUEPAD32_MAX_DEVICES
+
+#define MYPAD_TIMEOUT_MS 5000
 
 #define PRESSED(button, pv_button) (button==1 && pv_button==0)
 
@@ -34,6 +39,7 @@ typedef struct {
     int16_t RY;     // 右スティックのY軸: -512~512
     uint8_t battery_level; // バッテリー残量 (0-255)
     unsigned int connected: 1; // コントローラーが接続されているかどうか
+    TickType_t last_update; // 最後にデータ受け取った時間
 } mypad_t;
 
 extern const mypad_t EMPTY_MYPAD;
