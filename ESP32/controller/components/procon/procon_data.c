@@ -25,7 +25,8 @@ const mypad_t EMPTY_MYPAD = {
     .RX = 0,
     .RY = 0,
     .battery_level = 0,
-    .connected = 0
+    .connected = 0,
+    .last_update = 0,
 };
 
 void mypad_dump(mypad_t* pad) {
