@@ -9,7 +9,7 @@
 
 ## 実装状況
 
-`CAN_ID_UPPER_ARM_COMMAND`(`common/can_protocol/README.md`参照)を受信し，x/yから求めた偏角をShaftサーボ，zをZサーボのPWMへ反映する．`shaft_rotate=1`のときはアーム軸の回転によらずシャフトの向きを180度回転させる(`shaft_theta += M_PI`)．青/赤チーム選択で左右が反転し上側アームの動作偏角が270~360度/180~270度に分かれるが，このオフセットによりどちらも270度サーボの可動域(`SERVO_0`~`SERVO_270`)に収まる．`CAN_ID_UPPER_HOMING`受信時はShaftのみ`SERVO_0`へ戻す(Zは現在位置を維持する)．
+`CAN_ID_UPPER_ARM_COMMAND`(`common/can_protocol/README.md`参照)を受信し，x/yから求めた偏角をShaftサーボ，zをZサーボのPWMへ反映する．`CAN_ID_UPPER_HOMING`受信時はShaftのみ`SERVO_0`へ戻す(Zは現在位置を維持する)．
 
 Shaft/Zとも，計算したパルス幅を`SERVO_0`~`SERVO_270`の範囲にクランプしてから`__HAL_TIM_SET_COMPARE()`する．クランプが発生した(=可動域外のコマンドを受信した)場合はSTATUS_LEDを高速点滅(`STATUS_LED_ERROR_BLINK_MS`)させてエラーを知らせる．正常時はSTATUS_LEDを点灯させ，動作中であることを示す(いずれも`status_led_update()`をmainループ毎に呼ぶことで非ブロッキングに実現)．
 

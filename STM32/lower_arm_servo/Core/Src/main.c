@@ -130,10 +130,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる
-    // (基本は0~180度動くシャフトを，90~270度で動くようにする)
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる
     double shaft_theta = to_polar(direct).theta;
-    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI_2;}
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
+    // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
+    shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
     break;
 

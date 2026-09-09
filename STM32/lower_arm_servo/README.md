@@ -141,7 +141,7 @@ CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 ```
 
-`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．
+`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．Shaftは，`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加える．
 
 ```C
 /* USER CODE BEGIN 0 */
@@ -175,10 +175,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
 
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる
-    // (基本は0~180度動くシャフトを，90~270度で動くようにする)
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる
     double shaft_theta = to_polar(direct).theta;
-    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI_2;}
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
+    // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
+    shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
     break;
 

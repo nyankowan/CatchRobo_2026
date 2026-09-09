@@ -12,9 +12,10 @@ void lower_arm_move(
     bool left_pressed, bool middle_pressed, bool right_pressed,
     bool release_all_pressed,
     bool expand_toggle,
+    int16_t d_shaft_fine,
     bool shaft_rotate_toggle
 );
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
 
 esp_err_t send_lower_arm();
 esp_err_t send_upper_arm();

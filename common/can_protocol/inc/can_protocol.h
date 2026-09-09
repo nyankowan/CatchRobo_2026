@@ -57,22 +57,16 @@ typedef struct{
             uint8_t middle       :2; //hand_state_t
             uint8_t right        :2; //hand_state_t
             uint8_t expand       :1;
-            uint8_t shaft_rotate :1; //1:ハンドの向きを90度回転させる
+            uint8_t shaft_rotate :1; //1:ハンドの向きを180度回転させる
         };
     };
+    int8_t shaft_fine;//5 シャフト角度の微調整量(度)。L/Rボタンで加減算する
 }lower_arm_t;
 
 typedef struct{
     int16_t x;//0-1
     int16_t y;//2-3
     int16_t z;//4-5
-    union{
-        uint8_t flags;//6
-        struct{
-            uint8_t shaft_rotate :1; //1:シャフトの向きを180度回転させる
-            uint8_t              :7;
-        };
-    };
 }upper_arm_t;
 
 typedef uint8_t can_sequence_t;
@@ -117,10 +111,10 @@ static inline can_dlc_t can_protocol_get_dlc(can_id_t id)
         return 1;
 
     case CAN_ID_UPPER_ARM_COMMAND:
-        return 7;
+        return 6;
 
     case CAN_ID_LOWER_ARM_COMMAND:
-        return 5;
+        return 6;
 
     case CAN_ID_ASSEMBLE_COMMAND:
     case CAN_ID_ERROR_CODE:

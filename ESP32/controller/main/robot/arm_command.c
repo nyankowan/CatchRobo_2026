@@ -39,6 +39,9 @@ static hand_click_state_t right_click_state = {0};
 
 #define DOUBLE_CLICK_WINDOW_MS 300
 
+// シャフト角度の微調整(shaft_fine)の可動域(±度)
+#define LOWER_ARM_SHAFT_FINE_MAX_DEG 15
+
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
 static void error_code_notify(const can_data_t *data);
@@ -123,6 +126,7 @@ void lower_arm_move(
     bool left_pressed, bool middle_pressed, bool right_pressed,
     bool release_all_pressed,
     bool expand_toggle,
+    int16_t d_shaft_fine,
     bool shaft_rotate_toggle
 ){
     if(lower_arm_homing_in_progress)return;
@@ -155,12 +159,18 @@ void lower_arm_move(
     }
 
     if(expand_toggle)       {TOGGLE(lower_arm.expand, 1);}
-    if(shaft_rotate_toggle) {TOGGLE(lower_arm.shaft_rotate, 1);} // ハンドの向きを90度回転させる
+    if(shaft_rotate_toggle) {TOGGLE(lower_arm.shaft_rotate, 1);} // ハンドの向きを180度回転させる
+
+    // シャフト角度の微調整。L/Rの押しっぱなしで±LOWER_ARM_SHAFT_FINE_MAX_DEGの範囲に収める
+    int32_t fine = (int32_t)lower_arm.shaft_fine + d_shaft_fine;
+    if(fine < -LOWER_ARM_SHAFT_FINE_MAX_DEG) fine = -LOWER_ARM_SHAFT_FINE_MAX_DEG;
+    if(fine >  LOWER_ARM_SHAFT_FINE_MAX_DEG) fine =  LOWER_ARM_SHAFT_FINE_MAX_DEG;
+    lower_arm.shaft_fine = (int8_t)fine;
 }
 
 
 // homing中は動かない
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle){
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
     if (upper_arm_homing_in_progress)return;
 
     direct_t d = {
@@ -182,11 +192,6 @@ void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle
     if(z < UPPER_ARM_Z_MIN) z = UPPER_ARM_Z_MIN;
     if(z > UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE) z = UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE;
     upper_arm.z = (int16_t)z;
-
-    // シャフトの向きを180度回転させる。競技開始前の青/赤チーム選択で左右が反転し，
-    // 上側アームの動作偏角が270~360度/180~270度に分かれるため，このオフセットで
-    // どちらも270度サーボの可動域に収める。
-    if(shaft_rotate_toggle) {TOGGLE(upper_arm.shaft_rotate, 1);}
 }
 
 
@@ -406,6 +411,7 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
     lower_arm.x = larm.x;
     lower_arm.y = larm.y;
     lower_arm.shaft_rotate = 0; // homingでハンドの向きは基準位置に戻るので回転も解除する
+    lower_arm.shaft_fine = 0;   // 微調整オフセットも基準位置(0度)へ戻す
 
     if (data->homing_sequence != lower_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG,"lower homing DONE sequence error: rx=%u expected=%u",
@@ -437,7 +443,6 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
     upper_arm.x = uarm.x;
     upper_arm.y = uarm.y;
-    upper_arm.shaft_rotate = 0; // homingでシャフトの向きは基準位置に戻るので回転も解除する
 
     if (data->homing_sequence != upper_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG, "upper homing DONE sequence error: rx=%u expected=%u",
@@ -557,13 +562,14 @@ void lower_arm_dump(){
     );
 
     logi(
-        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), shaft_rotate %1d, "
+        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), shaft_rotate %1d, shaft_fine %3d, "
         "HAND{left %1d, middle %1d, right %d, expand %1d}\n",
         lower_arm.x,
         lower_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
         lower_arm.shaft_rotate,
+        lower_arm.shaft_fine,
         lower_arm.left,
         lower_arm.middle,
         lower_arm.right,
@@ -581,13 +587,12 @@ void upper_arm_dump(){
     );
 
     logi(
-        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d, shaft_rotate %1d\n",
+        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d\n",
         upper_arm.x,
         upper_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
-        upper_arm.z,
-        upper_arm.shaft_rotate
+        upper_arm.z
     );
 }
 

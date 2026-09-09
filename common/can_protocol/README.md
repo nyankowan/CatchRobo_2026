@@ -164,24 +164,16 @@ sequence numberは `0` ～ `255` を循環して使用する．
 ### DLC
 
 ```text
-7
+6
 ```
 
 ### データフォーマット
 
-| Byte | Type      | Name    | Description |
-| ---: | --------- | ------- | ----------- |
-|  0-1 | `int16_t` | `x`     | X方向指令 (mm)  |
-|  2-3 | `int16_t` | `y`     | Y方向指令 (mm)  |
-|  4-5 | `int16_t` | `z`     | Z方向指令 (mm)  |
-|    6 | `uint8_t` | `flags` | フラグ         |
-
-`flags`は各bitを以下のように使用する．
-
-| Bit | Name           | Description                     |
-| --: | -------------- | -------------------------------- |
-|   0 | `shaft_rotate` | 1:シャフトの向きを180度回転させる |
-| 1-7 | Reserved       | 使用しない                        |
+| Byte | Type      | Name | Description |
+| ---: | --------- | ---- | ----------- |
+|  0-1 | `int16_t` | `x`  | X方向指令 (mm)  |
+|  2-3 | `int16_t` | `y`  | Y方向指令 (mm)  |
+|  4-5 | `int16_t` | `z`  | Z方向指令 (mm)  |
 
 すべてLittle-endianで格納する．
 
@@ -194,8 +186,6 @@ Byte 3 : y MSB
 
 Byte 4 : z LSB
 Byte 5 : z MSB
-
-Byte 6 : flags(shaft_rotate)
 ```
 
 C言語上では `upper_arm_t` として表現する．
@@ -205,13 +195,6 @@ typedef struct {
     int16_t x;
     int16_t y;
     int16_t z;
-    union {
-        uint8_t flags;
-        struct {
-            uint8_t shaft_rotate : 1;
-            uint8_t              : 7;
-        };
-    };
 } upper_arm_t;
 ```
 
@@ -228,26 +211,29 @@ typedef struct {
 ### DLC
 
 ```text
-5
+6
 ```
 
 ### データフォーマット
 
-| Byte | Type      | Name   | Description |
-| ---: | --------- | ------ | ----------- |
-|  0-1 | `int16_t` | `x`    | X方向指令 (mm)  |
-|  2-3 | `int16_t` | `y`    | Y方向指令 (mm)  |
-|    4 | `uint8_t` | `hand` | Hand操作      |
+| Byte | Type      | Name         | Description        |
+| ---: | --------- | ------------ | ------------------- |
+|  0-1 | `int16_t` | `x`          | X方向指令 (mm)       |
+|  2-3 | `int16_t` | `y`          | Y方向指令 (mm)       |
+|    4 | `uint8_t` | `hand`       | Hand操作            |
+|    5 | `int8_t`  | `shaft_fine` | シャフト角度の微調整量(度) |
 
 `hand`は各bitを以下のように使用する．left/middle/rightはそれぞれ2bitで，`hand_state_t`(0～2)の状態を表す．
 
-| Bit | Name           | Description                  |
-| --: | -------------- | ----------------------------- |
-| 0-1 | `left`         | Left hand (`hand_state_t`)    |
-| 2-3 | `middle`       | Middle hand (`hand_state_t`)  |
-| 4-5 | `right`        | Right hand (`hand_state_t`)   |
-|   6 | `expand`       | Expand                        |
-|   7 | `shaft_rotate` | 1:ハンドの向きを90度回転させる |
+| Bit | Name           | Description                   |
+| --: | -------------- | ------------------------------ |
+| 0-1 | `left`         | Left hand (`hand_state_t`)     |
+| 2-3 | `middle`       | Middle hand (`hand_state_t`)   |
+| 4-5 | `right`        | Right hand (`hand_state_t`)    |
+|   6 | `expand`       | Expand                         |
+|   7 | `shaft_rotate` | 1:ハンドの向きを180度回転させる |
+
+`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-15`～`15`とする．
 
 `hand_state_t`は以下の3状態を取る．
 
@@ -297,6 +283,7 @@ typedef struct {
             uint8_t shaft_rotate : 1;
         };
     };
+    int8_t shaft_fine;
 } lower_arm_t;
 ```
 
