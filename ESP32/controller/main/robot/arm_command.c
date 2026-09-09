@@ -19,6 +19,28 @@
         (button) = 0;       \
     }
 
+/*
+ * Left/Middle/Rightハンドのシングルクリック/ダブルクリック判定用の状態。
+ * シングルクリック : HAND_STATE_CATCH <-> HAND_STATE_HOLD をトグル(RELEASEからはCATCHへ)
+ * ダブルクリック   : HAND_STATE_RELEASE <-> HAND_STATE_HOLD をトグル(CATCHからはRELEASEへ)
+ *
+ * 押下エッジが来た時点ではシングルクリックかダブルクリックか確定しないため，
+ * DOUBLE_CLICK_WINDOW_MS以内に次の押下が来るかどうかで判定する(来なければタイムアウトで
+ * シングルクリックとして確定する)。
+ */
+typedef struct{
+    bool pending_single;
+    TickType_t press_tick;
+}hand_click_state_t;
+
+static hand_click_state_t left_click_state = {0};
+static hand_click_state_t middle_click_state = {0};
+static hand_click_state_t right_click_state = {0};
+
+#define DOUBLE_CLICK_WINDOW_MS 300
+
+// シャフト角度の微調整(shaft_fine)の可動域(±度)
+#define LOWER_ARM_SHAFT_FINE_MAX_DEG 15
 
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
@@ -60,8 +82,53 @@ static esp_err_t send_upper_arm_error = ESP_OK;
 #define HOMING_REQUEST_RETRY_MS 100 //ACKが届かない場合，この間隔でHOMING要求を再送する
 
 
+/*
+ * 1本のハンド(left/middle/right)のシングルクリック/ダブルクリックを判定し，状態を更新する。
+ *
+ * シングルクリック : HAND_STATE_CATCH <-> HAND_STATE_HOLD をトグル(RELEASEからはCATCHへ)
+ * ダブルクリック   : HAND_STATE_RELEASE <-> HAND_STATE_HOLD をトグル(CATCHからはRELEASEへ)
+ *
+ * pressedは呼び出しごとの押下エッジ(このループでボタンが押された瞬間か)。
+ * 押下がなくても毎回呼び，保留中のシングルクリックのタイムアウト判定を行う。
+ *
+ * lower_arm.left等はビットフィールドでアドレスを取れないため，現在の状態を受け取り
+ * 更新後の状態を返す形にしている。
+ */
+static uint8_t apply_hand_click(uint8_t state, hand_click_state_t *click, bool pressed){
+    TickType_t now = xTaskGetTickCount();
+
+    // 保留中のシングルクリックがダブルクリックウィンドウを過ぎていれば，
+    // ダブルクリックではなかったと確定してシングルクリックの動作を適用する
+    if(click->pending_single &&
+       (now - click->press_tick) >= pdMS_TO_TICKS(DOUBLE_CLICK_WINDOW_MS)){
+        state = (state == HAND_STATE_CATCH) ? HAND_STATE_HOLD : HAND_STATE_CATCH;
+        click->pending_single = false;
+    }
+
+    if(!pressed)return state;
+
+    if(click->pending_single){
+        // ウィンドウ内の2回目の押下 = ダブルクリック確定
+        state = (state == HAND_STATE_RELEASE) ? HAND_STATE_HOLD : HAND_STATE_RELEASE;
+        click->pending_single = false;
+    }else{
+        // 1回目の押下。ダブルクリックかどうか確定するまで保留する
+        click->pending_single = true;
+        click->press_tick = now;
+    }
+    return state;
+}
+
+
 // homing中は動かない
-void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle, bool right_toggle, bool expand_toggle, bool shaft_rotate_toggle){
+void lower_arm_move(
+    int16_t dx, int16_t dy,
+    bool left_pressed, bool middle_pressed, bool right_pressed,
+    bool release_all_pressed,
+    bool expand_toggle,
+    int16_t d_shaft_fine,
+    bool shaft_rotate_toggle
+){
     if(lower_arm_homing_in_progress)return;
     direct_t d = {
         .x = lower_arm.x,
@@ -76,11 +143,29 @@ void lower_arm_move(int16_t dx,int16_t dy, bool left_toggle, bool middle_toggle,
         lower_arm.y = d.y;
     }
 
-    if(left_toggle)         {TOGGLE(lower_arm.left, 1);}
-    if(middle_toggle)       {TOGGLE(lower_arm.middle, 1);}
-    if(right_toggle)        {TOGGLE(lower_arm.right, 1);}
+    lower_arm.left   = apply_hand_click(lower_arm.left,   &left_click_state,   left_pressed);
+    lower_arm.middle = apply_hand_click(lower_arm.middle, &middle_click_state, middle_pressed);
+    lower_arm.right  = apply_hand_click(lower_arm.right,  &right_click_state,  right_pressed);
+
+    // 3本とも保持状態のときだけ，プラスボタンで3本同時にリリースする
+    // (いずれかがキャッチ状態のときは切り替わらない)
+    if(release_all_pressed &&
+       lower_arm.left   == HAND_STATE_HOLD &&
+       lower_arm.middle == HAND_STATE_HOLD &&
+       lower_arm.right  == HAND_STATE_HOLD){
+        lower_arm.left   = HAND_STATE_RELEASE;
+        lower_arm.middle = HAND_STATE_RELEASE;
+        lower_arm.right  = HAND_STATE_RELEASE;
+    }
+
     if(expand_toggle)       {TOGGLE(lower_arm.expand, 1);}
-    if(shaft_rotate_toggle) {TOGGLE(lower_arm.shaft_rotate, 1);} // ハンドの向きを90度回転させる
+    if(shaft_rotate_toggle) {TOGGLE(lower_arm.shaft_rotate, 1);} // ハンドの向きを180度回転させる
+
+    // シャフト角度の微調整。L/Rの押しっぱなしで±LOWER_ARM_SHAFT_FINE_MAX_DEGの範囲に収める
+    int32_t fine = (int32_t)lower_arm.shaft_fine + d_shaft_fine;
+    if(fine < -LOWER_ARM_SHAFT_FINE_MAX_DEG) fine = -LOWER_ARM_SHAFT_FINE_MAX_DEG;
+    if(fine >  LOWER_ARM_SHAFT_FINE_MAX_DEG) fine =  LOWER_ARM_SHAFT_FINE_MAX_DEG;
+    lower_arm.shaft_fine = (int8_t)fine;
 }
 
 
@@ -326,6 +411,7 @@ static void lower_arm_homing_done_notify(const can_data_t *data){
     lower_arm.x = larm.x;
     lower_arm.y = larm.y;
     lower_arm.shaft_rotate = 0; // homingでハンドの向きは基準位置に戻るので回転も解除する
+    lower_arm.shaft_fine = 0;   // 微調整オフセットも基準位置(0度)へ戻す
 
     if (data->homing_sequence != lower_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG,"lower homing DONE sequence error: rx=%u expected=%u",
@@ -476,13 +562,14 @@ void lower_arm_dump(){
     );
 
     logi(
-        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), shaft_rotate %1d, "
+        "lower_arm: CART(%4dmm,%4dmm), POR(%4.2fmm,%3.2f°), shaft_rotate %1d, shaft_fine %3d, "
         "HAND{left %1d, middle %1d, right %d, expand %1d}\n",
         lower_arm.x,
         lower_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
         lower_arm.shaft_rotate,
+        lower_arm.shaft_fine,
         lower_arm.left,
         lower_arm.middle,
         lower_arm.right,

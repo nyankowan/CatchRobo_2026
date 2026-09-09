@@ -83,6 +83,7 @@ int app_main(void) {
 #define GET_MYPAD_WAIT_MS 2000
 
 #define STICK_SCALE 128
+#define LOWER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
 void dump_task(void* arg){
     mypad_t mp[MAX_MYPAD] = {0};
     while(1){
@@ -132,8 +133,10 @@ void main_task(void* arg){
             PRESSED(lower_mypad.Y, lower_prev_mypad.Y),
             PRESSED(lower_mypad.X, lower_prev_mypad.X),
             PRESSED(lower_mypad.A, lower_prev_mypad.A),
+            PRESSED(lower_mypad.PLUS, lower_prev_mypad.PLUS),
             PRESSED(lower_mypad.B, lower_prev_mypad.B),
-            PRESSED(lower_mypad.L, lower_prev_mypad.L) || PRESSED(lower_mypad.R, lower_prev_mypad.R)
+            (lower_mypad.R - lower_mypad.L) * LOWER_ARM_SHAFT_FINE_STEP_DEG,
+            PRESSED(lower_mypad.ZL, lower_prev_mypad.ZL) || PRESSED(lower_mypad.ZR, lower_prev_mypad.ZR)
         );
         send_lower_arm();
 

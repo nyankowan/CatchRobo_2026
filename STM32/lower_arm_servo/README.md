@@ -100,7 +100,25 @@ CAN RX0 interrupt -> Enable
 /* USER CODE BEGIN PD */
 #define SERVO_0   500
 #define SERVO_270 2500
+#define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
+#define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
+
+#define ROBOT_TEAM_BLUE 0
+#define ROBOT_TEAM_RED  1
+#define ROBOT_TEAM ROBOT_TEAM_BLUE  //出場チームに応じて書き換えてビルドする
+
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
+#define SHAFT_ROTATE_ALLOWED_DEG_MIN 0.0
+#define SHAFT_ROTATE_ALLOWED_DEG_MAX 90.0
+#else
+#define SHAFT_ROTATE_ALLOWED_DEG_MIN 90.0
+#define SHAFT_ROTATE_ALLOWED_DEG_MAX 180.0
+#endif
 ```
+
+出場チーム(青/赤)はコード書き込み時に`ROBOT_TEAM`を書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．
+
+青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけシャフトを180度回転させる余裕があり(90~180度側でサーボの可動域上限に達する)，赤チームは左側に整理機構が来るため，逆にアーム角90~180度の範囲でだけ余裕がある．`SHAFT_ROTATE_ALLOWED_DEG_MIN`~`SHAFT_ROTATE_ALLOWED_DEG_MAX`はこの許容範囲を表し，範囲外では`shaft_rotate=1`を受信していても180度回転を適用しない(後述)．
 
 ```C
 /* USER CODE BEGIN Includes */
@@ -139,10 +157,22 @@ CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 ```
 
-`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．
+`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．Shaftは，`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加える．
 
 ```C
 /* USER CODE BEGIN 0 */
+
+/**
+* @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
+*/
+static uint32_t hand_state_to_pulse(hand_state_t state){
+  switch(state){
+    case HAND_STATE_HOLD:  return SERVO_45;
+    case HAND_STATE_CATCH: return SERVO_180;
+    case HAND_STATE_RELEASE:
+    default:                return SERVO_0;
+  }
+}
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
@@ -150,28 +180,33 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 
   switch (rx_header.StdId) {
   case CAN_ID_LOWER_ARM_COMMAND:
-    lower_arm_left   = rx_data.lower_arm.left;
-    lower_arm_middle = rx_data.lower_arm.middle;
-    lower_arm_right  = rx_data.lower_arm.right;
+    lower_arm_left   = (hand_state_t)rx_data.lower_arm.left;
+    lower_arm_middle = (hand_state_t)rx_data.lower_arm.middle;
+    lower_arm_right  = (hand_state_t)rx_data.lower_arm.right;
     lower_arm_expand = rx_data.lower_arm.expand;
 
-    if(rx_data.lower_arm.left)  {__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.right) {__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(lower_arm_left));
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(lower_arm_middle));
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
 
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる
-    // (基本は0~180度動くシャフトを，90~270度で動くようにする)
     double shaft_theta = to_polar(direct).theta;
-    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI_2;}
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
+    // ただしSHAFT_ROTATE_ALLOWED_DEG_MIN~MAX(チームごとに決まる，サーボの可動域内に
+    // 収まるアーム偏角の範囲)の外では回転させない(可動域を超えてしまうため)。
+    double arm_deg = shaft_theta * 180.0 / M_PI;
+    bool shaft_rotate_allowed = (SHAFT_ROTATE_ALLOWED_DEG_MIN <= arm_deg) && (arm_deg <= SHAFT_ROTATE_ALLOWED_DEG_MAX);
+    if(rx_data.lower_arm.shaft_rotate && shaft_rotate_allowed){shaft_theta += M_PI;}
+    // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
+    shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
     break;
 
   case CAN_ID_LOWER_HOMING:
-    lower_arm_left = false;
-    lower_arm_middle = false;
-    lower_arm_right = false;
+    lower_arm_left = HAND_STATE_RELEASE;
+    lower_arm_middle = HAND_STATE_RELEASE;
+    lower_arm_right = HAND_STATE_RELEASE;
     lower_arm_expand = false;
 
     __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
@@ -242,7 +277,7 @@ if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
 
 ### LED
 
-Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)を点滅回数で表示する．CAN受信ハンドラでON/OFFを保持しておき，`status_led_update()`を周期的(mainループ毎)に呼ぶことで非ブロッキングに表示する．
+Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)を点滅回数で表示する．Left/Middle/Rightは`hand_state_t`のHAND_STATE_RELEASE以外(HOLD/CATCH)をONとして扱う．CAN受信ハンドラでON/OFFを保持しておき，`status_led_update()`を周期的(mainループ毎)に呼ぶことで非ブロッキングに表示する．
 
 表示順は Left → Middle → Right → Expand で，各chはONなら2回，OFFなら1回の短い点滅で表す(点滅回数を数えればON/OFFが分かる)．周期の始まりは長い点灯(マーカー)で示す．
 
