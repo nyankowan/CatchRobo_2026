@@ -233,6 +233,8 @@ typedef struct {
 |   6 | `expand`       | Expand                         |
 |   7 | `shaft_rotate` | 1:ハンドの向きを180度回転させる |
 
+`shaft_rotate=1`は常に180度回転が適用されるとは限らない．出場チーム(青/赤)ごとに定まる，サーボの可動域内に収まるアーム偏角の範囲でのみ受信側(STM32/lower_arm_servo)が回転を適用する．詳細は[STM32/lower_arm_servo/README.md](../../STM32/lower_arm_servo/README.md)を参照．
+
 `shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-15`～`15`とする．
 
 `hand_state_t`は以下の3状態を取る．

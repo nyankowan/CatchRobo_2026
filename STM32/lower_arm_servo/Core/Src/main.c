@@ -42,6 +42,26 @@
 #define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
 #define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
 
+// 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
+// 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
+// 実行時にトグルする方式では状態を保持できない。そのため，チームに応じてこの値を
+// 書き換えてビルド・書き込みすることで固定する。
+#define ROBOT_TEAM_BLUE 0
+#define ROBOT_TEAM_RED  1
+#define ROBOT_TEAM ROBOT_TEAM_BLUE  //出場チームに応じて書き換えてビルドする
+
+// shaft_rotate(180度回転)を許可するアーム偏角の範囲(度)。
+// 青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけ180度回転させる
+// 余裕があり(90~180度側でサーボの可動域上限に達する)，赤チームは左側に整理機構が
+// 来るため，逆にアーム角90~180度の範囲でだけ余裕がある。
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
+#define SHAFT_ROTATE_ALLOWED_DEG_MIN 0.0
+#define SHAFT_ROTATE_ALLOWED_DEG_MAX 90.0
+#else
+#define SHAFT_ROTATE_ALLOWED_DEG_MIN 90.0
+#define SHAFT_ROTATE_ALLOWED_DEG_MAX 180.0
+#endif
+
 // Status_LEDでLeft->Middle->Right->Expandの順に各chの状態を点滅回数で表示する
 // 長いマーカー点灯(周期の開始) -> 各chごとに短い点滅(ON:2回 OFF:1回) -> 一定時間消灯 の繰り返し
 #define STATUS_LED_MARKER_MS     1000 //周期の始まりを示す長い点灯
@@ -130,9 +150,13 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる
     double shaft_theta = to_polar(direct).theta;
-    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
+    // ただしSHAFT_ROTATE_ALLOWED_DEG_MIN~MAX(チームごとに決まる，サーボの可動域内に
+    // 収まるアーム偏角の範囲)の外では回転させない(可動域を超えてしまうため)。
+    double arm_deg = shaft_theta * 180.0 / M_PI;
+    bool shaft_rotate_allowed = (SHAFT_ROTATE_ALLOWED_DEG_MIN <= arm_deg) && (arm_deg <= SHAFT_ROTATE_ALLOWED_DEG_MAX);
+    if(rx_data.lower_arm.shaft_rotate && shaft_rotate_allowed){shaft_theta += M_PI;}
     // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
     shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
