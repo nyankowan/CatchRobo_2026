@@ -196,7 +196,7 @@ void get_mypad(mypad_t mp[MAX_MYPAD]){
             mypad[i].connected && 
             xTaskGetTickCount() - mypad[i].last_update > pdMS_TO_TICKS(MYPAD_TIMEOUT_MS)){
             
-            logi("Controller %d timed out, diconnecting.\n", i);
+            logi("Controller %d timed out, disconnecting.\n", i);
             int idx = uni_hid_device_get_idx_for_instance(controllers[i]);
             uni_bt_disconnect_device_safe(idx); //切断処理をスケジューリング(非同期)
 
