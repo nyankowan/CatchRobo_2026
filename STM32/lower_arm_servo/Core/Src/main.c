@@ -37,6 +37,10 @@
 /* USER CODE BEGIN PD */
 #define SERVO_0   500
 #define SERVO_270 2500
+// Left/Middle/Rightハンドの中間角度(HAND_STATE_HOLD/HAND_STATE_CATCH)のパルス幅
+// SERVO_0(0度)~SERVO_270(270度)を基準に角度から線形補間する
+#define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
+#define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
 
 // Status_LEDでLeft->Middle->Right->Expandの順に各chの状態を点滅回数で表示する
 // 長いマーカー点灯(周期の開始) -> 各chごとに短い点滅(ON:2回 OFF:1回) -> 一定時間消灯 の繰り返し
@@ -65,8 +69,9 @@ UART_HandleTypeDef huart2;
 CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 
-// 現在のLeft/Middle/Right/Expandの状態(true=ON)．Status_LEDの点滅表示に使う
-bool lower_arm_left, lower_arm_middle, lower_arm_right, lower_arm_expand;
+// 現在のLeft/Middle/Rightの状態(hand_state_t)とExpandの状態(true=ON)．Status_LEDの点滅表示に使う
+hand_state_t lower_arm_left, lower_arm_middle, lower_arm_right;
+bool lower_arm_expand;
 
 typedef enum{
   STATUS_LED_STATE_MARKER,          //周期開始の長い点灯
@@ -97,20 +102,32 @@ static void MX_TIM3_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/**
+* @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
+*/
+static uint32_t hand_state_to_pulse(hand_state_t state){
+  switch(state){
+    case HAND_STATE_HOLD:  return SERVO_45;
+    case HAND_STATE_CATCH: return SERVO_180;
+    case HAND_STATE_RELEASE:
+    default:                return SERVO_0;
+  }
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   if(hcan->Instance != CAN)return;
   if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&rx_header,rx_data.raw) != HAL_OK)return;
 
   switch (rx_header.StdId) {
   case CAN_ID_LOWER_ARM_COMMAND:
-    lower_arm_left   = rx_data.lower_arm.left;
-    lower_arm_middle = rx_data.lower_arm.middle;
-    lower_arm_right  = rx_data.lower_arm.right;
+    lower_arm_left   = (hand_state_t)rx_data.lower_arm.left;
+    lower_arm_middle = (hand_state_t)rx_data.lower_arm.middle;
+    lower_arm_right  = (hand_state_t)rx_data.lower_arm.right;
     lower_arm_expand = rx_data.lower_arm.expand;
 
-    if(rx_data.lower_arm.left)  {__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.middle){__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);}
-    if(rx_data.lower_arm.right) {__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);}
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(lower_arm_left));
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(lower_arm_middle));
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる
@@ -121,9 +138,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     break;
 
   case CAN_ID_LOWER_HOMING:
-    lower_arm_left = false;
-    lower_arm_middle = false;
-    lower_arm_right = false;
+    lower_arm_left = HAND_STATE_RELEASE;
+    lower_arm_middle = HAND_STATE_RELEASE;
+    lower_arm_right = HAND_STATE_RELEASE;
     lower_arm_expand = false;
 
     __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
@@ -132,7 +149,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
     break;
-  
+
 
   default:
     break;
@@ -141,12 +158,13 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 
 /**
 * @brief chのindex(0:Left 1:Middle 2:Right 3:Expand)から現在の状態(true=ON)を返す．
+*        Left/Middle/RightはHAND_STATE_RELEASE以外(HOLD/CATCH)であればONとして扱う．
 */
 static bool status_led_channel_value(uint8_t channel_index){
   switch(channel_index){
-    case 0: return lower_arm_left;
-    case 1: return lower_arm_middle;
-    case 2: return lower_arm_right;
+    case 0: return lower_arm_left   != HAND_STATE_RELEASE;
+    case 1: return lower_arm_middle != HAND_STATE_RELEASE;
+    case 2: return lower_arm_right  != HAND_STATE_RELEASE;
     default: return lower_arm_expand;
   }
 }

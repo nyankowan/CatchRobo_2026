@@ -43,7 +43,7 @@ CANの調停仕様により，CAN IDが小さいメッセージほど高い優�
 | `0x021` | `LOWER_HOMING`                 |   1 | Lower Arm Homing開始要求     |
 | `0x025` | `LOWER_HOMING_DONE_ACK`        |   1 | Lower Arm Homing完了通知の確認  |
 | `0x026` | `LOWER_HOMING_DONE`            |   1 | Lower Arm Homing完了通知     |
-| `0x100` | `UPPER_ARM_COMMAND`            |   6 | Upper Armへの操作指令          |
+| `0x100` | `UPPER_ARM_COMMAND`            |   7 | Upper Armへの操作指令          |
 | `0x101` | `LOWER_ARM_COMMAND`            |   5 | Lower Armへの操作指令          |
 | `0x102` | `ASSEMBLE_COMMAND`             |   1 | Assemble機構への操作指令         |
 | `0x3F0` | `ERROR_CODE`                   |   1 | エラー通知                    |
@@ -164,16 +164,24 @@ sequence numberは `0` ～ `255` を循環して使用する．
 ### DLC
 
 ```text
-6
+7
 ```
 
 ### データフォーマット
 
-| Byte | Type      | Name | Description |
-| ---: | --------- | ---- | ----------- |
-|  0-1 | `int16_t` | `x`  | X方向指令 (mm)  |
-|  2-3 | `int16_t` | `y`  | Y方向指令 (mm)  |
-|  4-5 | `int16_t` | `z`  | Z方向指令 (mm)  |
+| Byte | Type      | Name    | Description |
+| ---: | --------- | ------- | ----------- |
+|  0-1 | `int16_t` | `x`     | X方向指令 (mm)  |
+|  2-3 | `int16_t` | `y`     | Y方向指令 (mm)  |
+|  4-5 | `int16_t` | `z`     | Z方向指令 (mm)  |
+|    6 | `uint8_t` | `flags` | フラグ         |
+
+`flags`は各bitを以下のように使用する．
+
+| Bit | Name           | Description                     |
+| --: | -------------- | -------------------------------- |
+|   0 | `shaft_rotate` | 1:シャフトの向きを180度回転させる |
+| 1-7 | Reserved       | 使用しない                        |
 
 すべてLittle-endianで格納する．
 
@@ -186,6 +194,8 @@ Byte 3 : y MSB
 
 Byte 4 : z LSB
 Byte 5 : z MSB
+
+Byte 6 : flags(shaft_rotate)
 ```
 
 C言語上では `upper_arm_t` として表現する．
@@ -195,6 +205,13 @@ typedef struct {
     int16_t x;
     int16_t y;
     int16_t z;
+    union {
+        uint8_t flags;
+        struct {
+            uint8_t shaft_rotate : 1;
+            uint8_t              : 7;
+        };
+    };
 } upper_arm_t;
 ```
 
@@ -222,30 +239,38 @@ typedef struct {
 |  2-3 | `int16_t` | `y`    | Y方向指令 (mm)  |
 |    4 | `uint8_t` | `hand` | Hand操作      |
 
-`hand`は各bitを以下のように使用する．
+`hand`は各bitを以下のように使用する．left/middle/rightはそれぞれ2bitで，`hand_state_t`(0～2)の状態を表す．
 
 | Bit | Name           | Description                  |
 | --: | -------------- | ----------------------------- |
-|   0 | `left`         | Left hand                     |
-|   1 | `middle`       | Middle hand                   |
-|   2 | `right`        | Right hand                    |
-|   3 | `expand`       | Expand                        |
-|   4 | `shaft_rotate` | 1:ハンドの向きを90度回転させる |
-| 5-7 | Reserved       | 使用しない                     |
+| 0-1 | `left`         | Left hand (`hand_state_t`)    |
+| 2-3 | `middle`       | Middle hand (`hand_state_t`)  |
+| 4-5 | `right`        | Right hand (`hand_state_t`)   |
+|   6 | `expand`       | Expand                        |
+|   7 | `shaft_rotate` | 1:ハンドの向きを90度回転させる |
 
-例えば，
+`hand_state_t`は以下の3状態を取る．
+
+| Value | Name                | サーボ角度 | Description        |
+| ----: | ------------------- | -----: | ------------------- |
+|     0 | `HAND_STATE_RELEASE` |    0度 | ワークをリリースする状態 |
+|     1 | `HAND_STATE_HOLD`    |   45度 | ワークを保持する状態     |
+|     2 | `HAND_STATE_CATCH`   |  180度 | ワークをキャッチする状態  |
+
+例えば(MSBからLSBの順)，
 
 ```text
-0000 0101
+0100 0110
 ```
 
 の場合，
 
 ```text
-left   = 1
-middle = 0
-right  = 1
-expand = 0
+shaft_rotate = 0
+expand       = 1
+right        = 00 (HAND_STATE_RELEASE)
+middle       = 01 (HAND_STATE_HOLD)
+left         = 10 (HAND_STATE_CATCH)
 ```
 
 となる．
@@ -253,18 +278,23 @@ expand = 0
 C言語上では `lower_arm_t` として表現する．
 
 ```c
+typedef enum {
+    HAND_STATE_RELEASE = 0,
+    HAND_STATE_HOLD    = 1,
+    HAND_STATE_CATCH   = 2,
+} hand_state_t;
+
 typedef struct {
     int16_t x;
     int16_t y;
     union {
         uint8_t hand;
         struct {
-            uint8_t left         : 1;
-            uint8_t middle       : 1;
-            uint8_t right        : 1;
+            uint8_t left         : 2;
+            uint8_t middle       : 2;
+            uint8_t right        : 2;
             uint8_t expand       : 1;
             uint8_t shaft_rotate : 1;
-            uint8_t              : 3;
         };
     };
 } lower_arm_t;

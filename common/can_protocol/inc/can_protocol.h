@@ -40,18 +40,24 @@ typedef enum{
     CAN_ID_ERROR_CODE=                  0x3F0
 }can_id_t;
 
+// left/middle/right各ハンドが取り得る状態．2bitで表現する．
+typedef enum{
+    HAND_STATE_RELEASE = 0, //サーボ0度  : ワークをリリースする状態
+    HAND_STATE_HOLD    = 1, //サーボ45度 : ワークを保持する状態
+    HAND_STATE_CATCH   = 2, //サーボ180度: ワークをキャッチする状態
+}hand_state_t;
+
 typedef struct{
     int16_t x;//0-1
     int16_t y;//2-3
     union{
         uint8_t hand;//4
         struct{
-            uint8_t left         :1;
-            uint8_t middle       :1;
-            uint8_t right        :1;
+            uint8_t left         :2; //hand_state_t
+            uint8_t middle       :2; //hand_state_t
+            uint8_t right        :2; //hand_state_t
             uint8_t expand       :1;
             uint8_t shaft_rotate :1; //1:ハンドの向きを90度回転させる
-            uint8_t              :3;
         };
     };
 }lower_arm_t;
@@ -60,6 +66,13 @@ typedef struct{
     int16_t x;//0-1
     int16_t y;//2-3
     int16_t z;//4-5
+    union{
+        uint8_t flags;//6
+        struct{
+            uint8_t shaft_rotate :1; //1:シャフトの向きを180度回転させる
+            uint8_t              :7;
+        };
+    };
 }upper_arm_t;
 
 typedef uint8_t can_sequence_t;
@@ -104,7 +117,7 @@ static inline can_dlc_t can_protocol_get_dlc(can_id_t id)
         return 1;
 
     case CAN_ID_UPPER_ARM_COMMAND:
-        return 6;
+        return 7;
 
     case CAN_ID_LOWER_ARM_COMMAND:
         return 5;

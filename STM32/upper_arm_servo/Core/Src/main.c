@@ -107,7 +107,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   switch (rx_header.StdId) {
   case CAN_ID_UPPER_ARM_COMMAND: {
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
+    // shaft_rotate=1のとき，アーム軸の回転によらずシャフトの向きを180度回転させる．
+    // 青/赤チームで左右反転すると上側アームの動作偏角は270~360度/180~270度に分かれるが，
+    // どちらも270度サーボの可動域に収まるようにこのオフセットで切り替える．
     double shaft_theta = to_polar(direct).theta;
+    if(rx_data.upper_arm.shaft_rotate){shaft_theta += M_PI;}
     double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
     double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 

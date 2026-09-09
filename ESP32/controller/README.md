@@ -62,11 +62,12 @@ bool get_connection(micon_type_t m);  // 対象のマイコンと通信できて
 ```c
 void lower_arm_move(
     int16_t dx, int16_t dy,
-    bool left_toggle, bool middle_toggle,
-    bool right_toggle, bool expand_toggle,
+    bool left_pressed, bool middle_pressed, bool right_pressed,
+    bool release_all_pressed,
+    bool expand_toggle,
     bool shaft_rotate_toggle
 );
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle);
 
 esp_err_t send_lower_arm();
 esp_err_t send_upper_arm();
@@ -76,8 +77,8 @@ esp_err_t upper_arm_homing();
 void arms_update();
 ```
 
-- `upper_arm_move()` : 差分入力(dx, dy, dz)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．ホーミング中は無視する．
-- `lower_arm_move()` : 座標(dx, dy)の扱いは`upper_arm_move()`と同様．加えてLeft/Middle/Right/Expandの各ハンドと，ハンドの向きを90度回転させる`shaft_rotate`を，トグル入力(ボタンのPRESSEDエッジ)で切り替える．ホーミング中は座標もハンド操作も無視する．
+- `upper_arm_move()` : 差分入力(dx, dy, dz)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．`shaft_rotate_toggle`(L/RボタンのPRESSEDエッジ)でシャフトの向きを180度回転させる`shaft_rotate`を切り替える．青/赤チーム選択で左右が反転し上側アームの動作偏角が270~360度/180~270度に分かれるため，このオフセットでどちらも270度サーボの可動域に収める．ホーミング中は無視する．
+- `lower_arm_move()` : 座標(dx, dy)の扱いは`upper_arm_move()`と同様．Left/Middle/Rightの各ハンドは`left_pressed`/`middle_pressed`/`right_pressed`(ボタンのPRESSEDエッジ)を受け取り，シングルクリックでHAND_STATE_CATCH↔HAND_STATE_HOLDを，ダブルクリック(`DOUBLE_CLICK_WINDOW_MS`=300ms以内の2回目の押下)でHAND_STATE_HOLD↔HAND_STATE_RELEASEをトグルする．3本ともHAND_STATE_HOLDのときに`release_all_pressed`(プラスボタン)を受け取ると3本同時にHAND_STATE_RELEASEへ切り替える(いずれかがHAND_STATE_CATCHのときは切り替わらない)．Expandと，ハンドの向きを90度回転させる`shaft_rotate`は，トグル入力(ボタンのPRESSEDエッジ)で切り替える．ホーミング中は座標もハンド操作も無視する．
 - `send_lower_arm()` / `send_upper_arm()` : 現在座標をCANで送信する．ホーミング中は送信しない．
 - `lower_arm_homing()` / `upper_arm_homing()` : ホーミング要求(`HOMING`)をSTM32(robomas_controller)に送信する．
 - `arms_update()` : 周期的に呼び，`HOMING_ACK`未受信時の要求再送(`HOMING_REQUEST_RETRY_MS`=100msごと)や，ホーミング全体のタイムアウト判定を行う．
