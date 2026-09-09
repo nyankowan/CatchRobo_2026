@@ -59,8 +59,24 @@ bool get_connection(micon_type_t m);  // 対象のマイコンと通信できて
 ### robot/arm_command
 
 両アーム(Upper/Lower)への座標指令とホーミングシーケンスを実装する．
+```c
+void lower_arm_move(
+    int16_t dx, int16_t dy,
+    bool left_toggle, bool middle_toggle,
+    bool right_toggle, bool expand_toggle,
+    bool shaft_rotate_toggle
+);
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
 
-- `upper_arm_move()` : ジョイスティックの差分入力(dx, dy)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．z軸(dz)は可動域チェックなしにそのまま加算する．ホーミング中は無視する．
+esp_err_t send_lower_arm();
+esp_err_t send_upper_arm();
+esp_err_t arms_init();
+esp_err_t lower_arm_homing();
+esp_err_t upper_arm_homing();
+void arms_update();
+```
+
+- `upper_arm_move()` : 差分入力(dx, dy, dz)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．ホーミング中は無視する．
 - `lower_arm_move()` : 座標(dx, dy)の扱いは`upper_arm_move()`と同様．加えてLeft/Middle/Right/Expandの各ハンドと，ハンドの向きを90度回転させる`shaft_rotate`を，トグル入力(ボタンのPRESSEDエッジ)で切り替える．ホーミング中は座標もハンド操作も無視する．
 - `send_lower_arm()` / `send_upper_arm()` : 現在座標をCANで送信する．ホーミング中は送信しない．
 - `lower_arm_homing()` / `upper_arm_homing()` : ホーミング要求(`HOMING`)をSTM32(robomas_controller)に送信する．
