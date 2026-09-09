@@ -105,6 +105,7 @@ static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
             logi("Controller %d connected\n", i);
             mypad[i] = EMPTY_MYPAD;
             mypad[i].battery_level = d->controller.battery;
+            mypadd[i].last_update = xTaskGetTickCount();
             mypad[i].connected = 1;
             // プレイヤーLEDを設定（Proconはset_player_ledsをサポート）  
             if (d->report_parser.set_player_leds != NULL)  
