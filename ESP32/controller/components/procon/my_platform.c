@@ -7,9 +7,14 @@
 
 #define PRO_CONTROLLER_COD 0b0010010100001000//cod=0x00002508
 
-// 接続されたコントローラーを保持する配列  
+// 接続されたコントローラーを保持する配列
 static uni_hid_device_t* controllers[MAX_MYPAD] = {0};
 static mypad_t mypad[MAX_MYPAD] = {0};
+
+// controllers[]/mypad[] はBTスレッド(on_device_ready/on_device_disconnected/on_controller_data)と
+// mainスレッド(get_mypad, タイムアウト切断処理)の両方から読み書きされるため、
+// アクセス時は必ずこのスピンロックで保護する。
+static portMUX_TYPE mypad_mux = portMUX_INITIALIZER_UNLOCKED;
 
 
 // Custom "instance"
@@ -85,56 +90,66 @@ static void my_platform_on_device_connected(uni_hid_device_t* d) {
 }
 
 static void my_platform_on_device_disconnected(uni_hid_device_t* d) {
-    for (int i = 0; i < MAX_MYPAD; i++) {  
-        if (controllers[i] == d) {  
-            controllers[i] = NULL;  
+    taskENTER_CRITICAL(&mypad_mux);
+    for (int i = 0; i < MAX_MYPAD; i++) {
+        if (controllers[i] == d) {
+            controllers[i] = NULL;
             logi("Controller %d disconnected\n", i);
             mypad[i] = EMPTY_MYPAD;
             mypad[i].connected = 0;
-            break;  
-        }  
-    }  
+            break;
+        }
+    }
+    taskEXIT_CRITICAL(&mypad_mux);
 }
 
 static uni_error_t my_platform_on_device_ready(uni_hid_device_t* d) {
     logi("custom: device ready: %p\n", d);
-    // 空きスロットに割り当てる  
-    for (int i = 0; i < MAX_MYPAD; i++) {  
-        if (controllers[i] == NULL) {  
-            controllers[i] = d;  
+    uni_error_t ret = UNI_ERROR_NO_SLOTS;
+    taskENTER_CRITICAL(&mypad_mux);
+    // 空きスロットに割り当てる
+    for (int i = 0; i < MAX_MYPAD; i++) {
+        if (controllers[i] == NULL) {
+            controllers[i] = d;
             logi("Controller %d connected\n", i);
             mypad[i] = EMPTY_MYPAD;
             mypad[i].battery_level = d->controller.battery;
-            mypadd[i].last_update = xTaskGetTickCount();
+            mypad[i].last_update = xTaskGetTickCount();
             mypad[i].connected = 1;
-            // プレイヤーLEDを設定（Proconはset_player_ledsをサポート）  
-            if (d->report_parser.set_player_leds != NULL)  
-                d->report_parser.set_player_leds(d, BIT(i));  
-            return UNI_ERROR_SUCCESS;  
-        }  
+            // プレイヤーLEDを設定（Proconはset_player_ledsをサポート）
+            if (d->report_parser.set_player_leds != NULL)
+                d->report_parser.set_player_leds(d, BIT(i));
+            ret = UNI_ERROR_SUCCESS;
+            break;
+        }
     }
-    // スロットが埋まっていたら拒否 
-    logi("slots are full: %p\n", d);
-    return UNI_ERROR_NO_SLOTS;  
+    taskEXIT_CRITICAL(&mypad_mux);
+
+    if (ret != UNI_ERROR_SUCCESS) {
+        // スロットが埋まっていたら拒否
+        logi("slots are full: %p\n", d);
+    }
+    return ret;
 }
 
 static void my_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t* ctl) {
-    // どのコントローラーか特定する  
-    int player = -1;  
-    for (int i = 0; i < MAX_MYPAD; i++) {  
-        if (controllers[i] == d) { player = i; break; }  
-    }  
-    if (player < 0) return;  
-  
-    if (ctl->klass == UNI_CONTROLLER_CLASS_GAMEPAD) {  
-        uni_gamepad_t* gp = &ctl->gamepad;  
+    taskENTER_CRITICAL(&mypad_mux);
+    // どのコントローラーか特定する
+    int player = -1;
+    for (int i = 0; i < MAX_MYPAD; i++) {
+        if (controllers[i] == d) { player = i; break; }
+    }
+
+    if (player >= 0 && ctl->klass == UNI_CONTROLLER_CLASS_GAMEPAD) {
+        uni_gamepad_t* gp = &ctl->gamepad;
         //各プレイヤーの入力からmypadに翻訳
         uni_gamepad_remap(gp);
         convert_gp(gp, &mypad[player]);
         mypad[player].last_update = xTaskGetTickCount();
         mypad[player].connected = 1;
         mypad[player].battery_level = ctl->battery;
-    }  
+    }
+    taskEXIT_CRITICAL(&mypad_mux);
 }
 
 static const uni_property_t* my_platform_get_property(uni_property_idx_t idx) {
@@ -191,21 +206,27 @@ void convert_gp(uni_gamepad_t *gp, mypad_t *mp){
 }
 
 void get_mypad(mypad_t mp[MAX_MYPAD]){
+    taskENTER_CRITICAL(&mypad_mux);
     for(int i = 0; i<MAX_MYPAD; i++){
         if (controllers[i] != NULL &&
-            mypad[i].connected && 
+            mypad[i].connected &&
             xTaskGetTickCount() - mypad[i].last_update > pdMS_TO_TICKS(MYPAD_TIMEOUT_MS)){
-            
+
             logi("Controller %d timed out, disconnecting.\n", i);
             int idx = uni_hid_device_get_idx_for_instance(controllers[i]);
-            uni_bt_disconnect_device_safe(idx); //切断処理をスケジューリング(非同期)
 
             //切断処理は非同期に呼ばれるため，mypadは即座に切断状態にする．
-            //mainスレッドとBTスレッドどちらもmypad,controllersへの書き込みをすることになるので，排他制御を追加する必要がある．
             mypad[i] = EMPTY_MYPAD;
             controllers[i] = NULL;
+
+            // uni_bt_disconnect_device_safe() はBTスレッド宛てにメッセージをキューイングする
+            // だけの処理だが、内部でmutex等を取る可能性があるため、念のため自前のクリティカル
+            // セクションの外側で呼び出す。
+            taskEXIT_CRITICAL(&mypad_mux);
+            uni_bt_disconnect_device_safe(idx); //切断処理をスケジューリング(非同期)
+            taskENTER_CRITICAL(&mypad_mux);
         }
         mp[i] = mypad[i];
-        
     }
+    taskEXIT_CRITICAL(&mypad_mux);
 }
