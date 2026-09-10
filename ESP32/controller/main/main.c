@@ -82,7 +82,7 @@ int app_main(void) {
 #define DUMP_TASK_LOOP_MS 2000
 #define GET_MYPAD_WAIT_MS 2000
 
-#define STICK_SCALE 128
+#define STICK_SCALE 32
 #define LOWER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
 void dump_task(void* arg){
     mypad_t mp[MAX_MYPAD] = {0};
