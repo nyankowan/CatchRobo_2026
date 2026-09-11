@@ -1,6 +1,6 @@
 #define ARM_NUM 2
-#define UPPER_ARM_R_RANGE 675.0   //ToDo: 上側アームのアーム長可動域(mm)
-#define UPPER_ARM_R_MIN 495.0     //ToDo: アーム長を一番短くしたときのR(mm)を測る
+#define UPPER_ARM_R_RANGE 665.0   //ToDo: 上側アームのアーム長可動域(mm)
+#define UPPER_ARM_R_MIN 415.0     //ToDo: アーム長を一番短くしたときのR(mm)を測る
 #define UPPER_ARM_DEG_RANGE 180.0 //偏角の可動域(degree)
 #define UPPER_ARM_DEG_MIN 180.0     //偏角の下限
 
@@ -8,8 +8,8 @@
 #define UPPER_ARM_Z_MIN 0.0                 //Zの下限(mm)
 #define UPPER_ARM_Z_RANGE 174                //Zの可動域(mm)
 
-#define LOWER_ARM_R_RANGE 850.0   //ToDo: 下側アームのアーム長可動域(mm)
-#define LOWER_ARM_R_MIN 335.0     //ToDo: アーム長を一番短くしたときのR(mm)を測る
+#define LOWER_ARM_R_RANGE 834.0   //ToDo: 下側アームのアーム長可動域(mm)
+#define LOWER_ARM_R_MIN 342.0     //ToDo: アーム長を一番短くしたときのR(mm)を測る
 #define LOWER_ARM_DEG_RANGE 180.0 //偏角の可動域(degree)
 #define LOWER_ARM_DEG_MIN 0.0     //偏角の下限
 
