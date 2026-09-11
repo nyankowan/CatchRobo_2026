@@ -39,8 +39,8 @@
 #define SERVO_270 2500
 // Left/Middle/Rightハンドの中間角度(HAND_STATE_HOLD/HAND_STATE_CATCH)のパルス幅
 // SERVO_0(0度)~SERVO_270(270度)を基準に角度から線形補間する
-#define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
-#define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
+#define SERVO_45  833
+#define SERVO_225 2167
 
 // 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
 // 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
@@ -125,13 +125,22 @@ static void MX_TIM3_Init(void);
 /**
 * @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
 */
-static uint32_t hand_state_to_pulse(hand_state_t state){
-  switch(state){
-    case HAND_STATE_HOLD:  return SERVO_45;
-    case HAND_STATE_CATCH: return SERVO_180;
-    case HAND_STATE_RELEASE:
-    default:                return SERVO_0;
+static uint32_t hand_state_to_pulse(hand_state_t *state){
+  if(state == NULL)return 0;
+  if(state == lower_arm_left){
+      switch(*state){
+      case HAND_STATE_HOLD:  return SERVO_45;
+      case HAND_STATE_CATCH: return SERVO_270;
+      case HAND_STATE_RELEASE:
+      default:                return SERVO_0;
+    }
+  }else{
+      case HAND_STATE_HOLD:  return SERVO_225;
+      case HAND_STATE_CATCH: return SERVO_0;
+      case HAND_STATE_RELEASE:
+      default:                return SERVO_270;
   }
+  
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
@@ -145,9 +154,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     lower_arm_right  = (hand_state_t)rx_data.lower_arm.right;
     lower_arm_expand = rx_data.lower_arm.expand;
 
-    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(lower_arm_left));
-    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(lower_arm_middle));
-    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_left));
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_middle));
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     double shaft_theta = to_polar(direct).theta;
@@ -169,8 +178,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     lower_arm_expand = false;
 
     __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);
     __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);
     __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
     break;
