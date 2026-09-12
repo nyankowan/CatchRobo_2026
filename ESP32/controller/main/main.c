@@ -143,8 +143,7 @@ void main_task(void* arg){
         upper_arm_move(
             upper_mypad.RIGHT - upper_mypad.LEFT + upper_mypad.LX,
             upper_mypad.UP -    upper_mypad.DOWN - upper_mypad.LY,
-            upper_mypad.A -     upper_mypad.B,
-            PRESSED(upper_mypad.ZL, upper_prev_mypad.ZL) || PRESSED(upper_mypad.ZR, upper_prev_mypad.ZR)
+            upper_mypad.A -     upper_mypad.B
         );
         send_upper_arm();
 
