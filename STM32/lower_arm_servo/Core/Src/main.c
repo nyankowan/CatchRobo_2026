@@ -42,6 +42,9 @@
 #define SERVO_45  833
 #define SERVO_225 2167
 
+#define SERVO_150 1622
+#define SERVO_120 1388
+
 // 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
 // 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
 // 実行時にトグルする方式では状態を保持できない。そのため，チームに応じてこの値を
@@ -141,14 +144,14 @@ static uint32_t hand_state_to_pulse(hand_state_t *state){
   if(state == lower_arm_left){
     switch(*state){
       case HAND_STATE_HOLD:  return SERVO_45;
-      case HAND_STATE_CATCH: return SERVO_270;
+      case HAND_STATE_CATCH: return SERVO_150;
       case HAND_STATE_RELEASE:
       default:                return SERVO_0;
     }
   }else{
     switch(*state){
       case HAND_STATE_HOLD:  return SERVO_225;
-      case HAND_STATE_CATCH: return SERVO_0;
+      case HAND_STATE_CATCH: return SERVO_120;
       case HAND_STATE_RELEASE:
       default:                return SERVO_270;
     }
