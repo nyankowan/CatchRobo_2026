@@ -103,9 +103,8 @@ CAN RX0 interrupt -> Enable
 #define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
 #define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
 
-#define ROBOT_TEAM_BLUE 0
-#define ROBOT_TEAM_RED  1
-#define ROBOT_TEAM ROBOT_TEAM_BLUE  //出場チームに応じて書き換えてビルドする
+// ROBOT_TEAM(出場チーム 青/赤)はcommon/arm/inc/arm.hで定義される(ESP32/STM32の
+// 全ファームウェアで共有する値なので，このファイルでは再定義しない)。
 
 #if ROBOT_TEAM == ROBOT_TEAM_BLUE
 #define SHAFT_ROTATE_ALLOWED_DEG_MIN 0.0
@@ -116,7 +115,7 @@ CAN RX0 interrupt -> Enable
 #endif
 ```
 
-出場チーム(青/赤)はコード書き込み時に`ROBOT_TEAM`を書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．
+出場チーム(青/赤)は`common/arm/inc/arm.h`の`ROBOT_TEAM`をコード書き込み時に書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．`robomas_controller`など`arm.h`を使う全ファームウェアで必ず同じ値にすること．
 
 青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけシャフトを180度回転させる余裕があり(90~180度側でサーボの可動域上限に達する)，赤チームは左側に整理機構が来るため，逆にアーム角90~180度の範囲でだけ余裕がある．`SHAFT_ROTATE_ALLOWED_DEG_MIN`~`SHAFT_ROTATE_ALLOWED_DEG_MAX`はこの許容範囲を表し，範囲外では`shaft_rotate=1`を受信していても180度回転を適用しない(後述)．
 

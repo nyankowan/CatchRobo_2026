@@ -7,12 +7,12 @@
 | Status_LED | PA5 | GPIO_Output |
 | Upper Arm R軸 リミットスイッチ | PC2 | GPIO_Input (UPPER_ARM_R_LIMIT) |
 | Upper Arm Deg軸 下限リミットスイッチ | PC3 | GPIO_Input (UPPER_ARM_DEG_UNDER_LIMIT) |
-| Upper Arm Deg軸 上限リミットスイッチ | PC4 | GPIO_Input (UPPER_ARM_DEG_OVER_LIMIT，未使用) |
+| Upper Arm Deg軸 上限リミットスイッチ | PC4 | GPIO_Input (UPPER_ARM_DEG_OVER_LIMIT) |
 | Lower Arm R軸 リミットスイッチ | PC5 | GPIO_Input (LOWER_ARM_R_LIMIT) |
 | Lower Arm Deg軸 下限リミットスイッチ | PC10 | GPIO_Input (LOWER_ARM_DEG_UNDER_LIMIT) |
-| Lower Arm Deg軸 上限リミットスイッチ | PC11 | GPIO_Input (LOWER_ARM_DEG_OVER_LIMIT，未使用) |
+| Lower Arm Deg軸 上限リミットスイッチ | PC11 | GPIO_Input (LOWER_ARM_DEG_OVER_LIMIT) |
 
-各軸の`_UNDER_LIMIT`(ホーミング方向のリミットスイッチ)のみソフトウェアで読み取っている(下記Homingシーケンス参照)．`_OVER_LIMIT`はハードウェアの可動域超過検知用の入力として定義されているのみで，現状のファームウェアからは読み取っていない．
+DEG軸は`ROBOT_TEAM`(下記「DEG軸のホーミング方向とROBOT_TEAM」参照)に応じて`_UNDER_LIMIT`/`_OVER_LIMIT`のどちらか一方をホーミングに使う．R軸は`_R_LIMIT`のみ(チームに依らず固定)．
 
 # 概要
 両アームのアーム長とアーム偏角をロボマスターにより制御する．
@@ -95,9 +95,24 @@ Main Controller                     Robomas Controller
 
 ### Homing処理
 - `HOMING_UPPER_DEG_RPM` / `HOMING_LOWER_DEG_RPM` / `HOMING_UPPER_R_RPM` / `HOMING_LOWER_R_RPM` (`common/arm/inc/arm.h`)で指定される回転数でリミットスイッチ方向へ回転する．
-- リミットスイッチ検出で`ROBOMAS_IDLE`に遷移し，その時点のロボマス角度を極座標原点(r軸は`*_ARM_R_MIN`を考慮したオフセット付き)として記録する．
+- リミットスイッチ検出で`ROBOMAS_IDLE`に遷移し，その時点のロボマス角度を極座標原点として記録する．r軸は`*_ARM_R_MIN`，deg軸は`LOWER/UPPER_ARM_DEG_HOME_DEG`(`common/arm/inc/arm.h`。チーム・原点にする可動端で変わる。下記参照)を考慮したオフセット付き．
 - `HOMING_UPPER_ARM_TIMEOUT_MS` / `HOMING_LOWER_ARM_TIMEOUT_MS`(いずれも10000ms)以内にリミットスイッチを検出できなければ，両軸を`ROBOMAS_INITIAL`に戻し，`CAN_ID_ERROR_CODE`(`CAN_ERROR_*_HOMING_TIMEOUT`)を送信する．リミットスイッチ故障や配線不良で無限に回転し続けることを防ぐための仕組み．
 - このタイムアウト通知は，一度のホーミング試行につき`upper/lower_homing_timeout_notified`フラグにより1回だけ送信される．`ROBOMAS_ERROR`(フィードバック途絶)状態の軸は上書きせずそのまま`robomas_update()`に管理を委ねるため，タイムアウト処理と`ROBOMAS_ERROR`検知が互いの状態を打ち消し合って`CAN_ID_ERROR_CODE`を送り続ける(スパムする)ことがない．フラグは新しいホーミング要求を受理した時点でリセットされる．
+
+### DEG軸のホーミング方向とROBOT_TEAM
+赤/青チームはフィールドが鏡合わせのため，整理機構を左右逆側に付け替える必要がある(機体自体は鏡像に反転するのではなく，180度回転させて取り付ける)．これに合わせて，上下アームとも「DEG軸(偏角)のどちら側の可動端(リミットスイッチ)をホーミング原点にするか」をチームで切り替える．
+
+- 赤チーム: 可動域下限側(`*_DEG_UNDER_LIMIT`，整理機構は左)を原点にする(従来通り)．
+- 青チーム: 可動域上限側(`*_DEG_OVER_LIMIT`，整理機構は右)を原点にする．
+
+`ROBOT_TEAM`(`ROBOT_TEAM_RED`/`ROBOT_TEAM_BLUE`)は`common/arm/inc/arm.h`で定義され，ESP32 Main Controller・`lower_arm_servo`・`upper_arm_servo`とこのファームウェアで共有する．**出場チームに応じて`arm.h`のこの値を書き換えてから，全ファームウェアをビルド・書き込みすること(値がずれると，DEG軸のホーミングで検出するリミットスイッチと回転方向が基板間で食い違い，可動域の反対側の固定端に衝突する恐れがある)．**
+
+このファームウェア内では，`ROBOT_TEAM`に応じて以下を切り替えている:
+- `*_DEG_HOMING_LIMIT_ON`: ホーミング完了を検出するリミットスイッチ(`*_DEG_UNDER_LIMIT_ON`/`*_DEG_OVER_LIMIT_ON`)．
+- `*_DEG_HOMING_DIRECTION_SIGN`: ホーミング時の回転方向の符号．原点にする側へ実際に向かうよう反転させる(配線・機構で決まる固定値`*_DEG_ROBOMAS_DIRECTION`自体は変えない)．
+- `set_robomas_deg_from_coordinate()`内の`polar_deg_unwrapped()`: 偏角が360度(=0度)をまたぐ場合(青チームでの上アーム等)に，`to_polar()`の値域[0,2π)によるラップで原点付近の値が不連続にならないよう正規化する．
+
+R軸(アームの伸縮，並進)は原点にする可動端が変わらないため，チームに依らず固定．
 
 ### HOMING_DONE送信 → HOMING_DONE_ACK待ち
 - 両軸が`ROBOMAS_IDLE`になった瞬間，`ROBOMAS_READY`に遷移すると同時に，保持していたsequence numberで`HOMING_DONE`を送信する．
