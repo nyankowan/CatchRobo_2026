@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "can_protocol.h"
 #include "coordinate.h"
+#include "arm.h"
 #include "stm_can.h"
 #include <math.h>
 #include <stdbool.h>
@@ -45,13 +46,11 @@
 #define SERVO_150 1622
 #define SERVO_120 1388
 
-// 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
-// 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
-// 実行時にトグルする方式では状態を保持できない。そのため，チームに応じてこの値を
-// 書き換えてビルド・書き込みすることで固定する。
-#define ROBOT_TEAM_BLUE 0
-#define ROBOT_TEAM_RED  1
-#define ROBOT_TEAM ROBOT_TEAM_RED  //出場チームに応じて書き換えてビルドする
+// ROBOT_TEAM(出場チーム 青/赤)はcommon/arm/inc/arm.hで定義される。
+// ESP32/STM32の全ファームウェアで共有する値なので，このファイルでは再定義しない。
+// (競技開始前に決定した後は変更しない。緊急停止スイッチが押されるとESP32/STM32の
+//  各基板は再起動するため，実行時にトグルする方式では状態を保持できない。そのため，
+//  チームに応じてarm.h側の値を書き換えてビルド・書き込みすることで固定する。)
 
 // shaft_rotate(180度回転)を許可するアーム偏角の範囲(度)。
 // 青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけ180度回転させる

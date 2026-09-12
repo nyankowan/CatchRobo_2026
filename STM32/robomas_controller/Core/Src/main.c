@@ -154,25 +154,13 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_M2_GEAR_RATIO 36              //M2006
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
-// 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
-// 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
-// 実行時にトグルする方式では状態を保持できない。そのため，チームに応じてこの値を
-// 書き換えてビルド・書き込みすることで固定する。(STM32/lower_arm_servoと同じ方式)
-#define ROBOT_TEAM_BLUE 0
-#define ROBOT_TEAM_RED  1
-#define ROBOT_TEAM ROBOT_TEAM_RED  //出場チームに応じて書き換えてビルドする
+// ROBOT_TEAM(出場チーム 青/赤)はcommon/arm/inc/arm.hで定義される。
+// ESP32/STM32の全ファームウェアで共有する値なので，このファイルでは再定義しない。
 
 //上下でロボマスの取り付け向きが逆なため，R軸と同様にDEG軸も上下で別定数にして符号を反転する
-//さらに，赤/青チームは互いに向かい合わせの鏡合わせ構造(機体を反転して取り付けている)であり，
-//鏡映はDEG軸(回転)の向き(ハンドル性)を反転させるため，DEG軸の符号はチームでも反転させる必要がある。
-//R軸(アームの伸縮，並進)は鏡映でも向きが変わらないため，チームに依らず固定でよい。
-#if ROBOT_TEAM == ROBOT_TEAM_BLUE
-#define LOWER_ARM_DEG_ROBOMAS_DIRECTION -1
-#define UPPER_ARM_DEG_ROBOMAS_DIRECTION 1
-#else
-#define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき(赤チーム基準)
+//(この符号は配線・機構で決まる固定値で，チームによっては変わらない)
+#define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
 #define UPPER_ARM_DEG_ROBOMAS_DIRECTION -1
-#endif
 #define LOWER_ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
 #define UPPER_ARM_R_ROBOMAS_DIRECTION -1
 
@@ -181,15 +169,36 @@ uint32_t status_led_phase_start;
 //      リミットスイッチ：COM NO NC の三つのコネクタがあり，COMは常に接続されている．NOはスイッチを押すと導通，NCはスイッチを離すと導通．
 #define LOWER_ARM_DEG_UNDER_LIMIT_ON (HAL_GPIO_ReadPin(LOWER_ARM_DEG_UNDER_LIMIT_GPIO_Port, LOWER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_RESET)
 #define LOWER_ARM_DEG_UNDER_LIMIT_OFF !LOWER_ARM_DEG_UNDER_LIMIT_ON
+#define LOWER_ARM_DEG_OVER_LIMIT_ON (HAL_GPIO_ReadPin(LOWER_ARM_DEG_OVER_LIMIT_GPIO_Port, LOWER_ARM_DEG_OVER_LIMIT_Pin) == GPIO_PIN_RESET)
 
 #define LOWER_ARM_R_LIMIT_ON (HAL_GPIO_ReadPin(LOWER_ARM_R_LIMIT_GPIO_Port, LOWER_ARM_R_LIMIT_Pin) == GPIO_PIN_RESET)
 #define LOWER_ARM_R_LIMIT_OFF !LOWER_ARM_R_LIMIT_ON
 
 #define UPPER_ARM_DEG_UNDER_LIMIT_ON (HAL_GPIO_ReadPin(UPPER_ARM_DEG_UNDER_LIMIT_GPIO_Port, UPPER_ARM_DEG_UNDER_LIMIT_Pin) == GPIO_PIN_RESET)
 #define UPPER_ARM_DEG_UNDER_LIMIT_OFF !UPPER_ARM_DEG_UNDER_LIMIT_ON
+#define UPPER_ARM_DEG_OVER_LIMIT_ON (HAL_GPIO_ReadPin(UPPER_ARM_DEG_OVER_LIMIT_GPIO_Port, UPPER_ARM_DEG_OVER_LIMIT_Pin) == GPIO_PIN_RESET)
 
 #define UPPER_ARM_R_LIMIT_ON (HAL_GPIO_ReadPin(UPPER_ARM_R_LIMIT_GPIO_Port, UPPER_ARM_R_LIMIT_Pin) == GPIO_PIN_RESET)
 #define UPPER_ARM_R_LIMIT_OFF !UPPER_ARM_R_LIMIT_ON
+
+// 赤/青チームはフィールドが鏡合わせのため整理機構を左右逆側に付け替える必要があり，
+// それに合わせてDEG軸(偏角)をどちら側の可動端(リミットスイッチ)を原点として
+// ホーミングするかを切り替える(LOWER/UPPER_ARM_DEG_HOME_DEGはcommon/arm/inc/arm.h参照)。
+// 赤チーム: 可動域下限(_DEG_UNDER_LIMIT，整理機構は左)へ向けてホーミングする(従来通り)。
+// 青チーム: 可動域上限(_DEG_OVER_LIMIT，整理機構は右)へ向けてホーミングする。
+// ホーミング回転方向は，原点にする側へ実際に向かうよう符号(*_DEG_HOMING_DIRECTION_SIGN)を
+// 反転させる。DEG_ROBOMAS_DIRECTION(配線で決まる固定値)自体は変えない。
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
+#define LOWER_ARM_DEG_HOMING_LIMIT_ON LOWER_ARM_DEG_OVER_LIMIT_ON
+#define UPPER_ARM_DEG_HOMING_LIMIT_ON UPPER_ARM_DEG_OVER_LIMIT_ON
+#define LOWER_ARM_DEG_HOMING_DIRECTION_SIGN 1
+#define UPPER_ARM_DEG_HOMING_DIRECTION_SIGN 1
+#else
+#define LOWER_ARM_DEG_HOMING_LIMIT_ON LOWER_ARM_DEG_UNDER_LIMIT_ON
+#define UPPER_ARM_DEG_HOMING_LIMIT_ON UPPER_ARM_DEG_UNDER_LIMIT_ON
+#define LOWER_ARM_DEG_HOMING_DIRECTION_SIGN (-1)
+#define UPPER_ARM_DEG_HOMING_DIRECTION_SIGN (-1)
+#endif
 
 /* USER CODE END PD */
 
@@ -495,14 +504,14 @@ void upper_homing(){
     });
   }
 
-  if(robomas_upper_deg.state == ROBOMAS_HOMING && UPPER_ARM_DEG_UNDER_LIMIT_ON){
+  if(robomas_upper_deg.state == ROBOMAS_HOMING && UPPER_ARM_DEG_HOMING_LIMIT_ON){
     robomas_upper_deg.state = ROBOMAS_IDLE;
-    // 上のアームはハンドの取り付け側が下のアームと逆なため，偏角の下限(UPPER_ARM_DEG_MIN=180度)が
-    // リミットスイッチ位置になる。R軸のUPPER_ARM_R_MINオフセットと同様に，
-    // set_robomas_deg_from_coordinate()がtheta=0基準で計算するsvと辻褄が合うよう，
-    // ここでtheta=UPPER_ARM_DEG_MIN分のオフセットをtotal_angle_homeへ焼き込む。
+    // 原点となる偏角はUPPER_ARM_DEG_HOME_DEG(チームに応じてUNDER/OVERどちらの
+    // リミットスイッチかで変わる。common/arm/inc/arm.h参照)。R軸のUPPER_ARM_R_MINオフセットと
+    // 同様に，set_robomas_deg_from_coordinate()がtheta=0基準で計算するsvと辻褄が合うよう，
+    // ここでtheta=UPPER_ARM_DEG_HOME_DEG分のオフセットをtotal_angle_homeへ焼き込む。
     robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle
-      - UPPER_ARM_DEG_ROBOMAS_DIRECTION * (UPPER_ARM_DEG_MIN / 360.0) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * robomas_upper_deg.gear_ratio;
+      - UPPER_ARM_DEG_ROBOMAS_DIRECTION * (UPPER_ARM_DEG_HOME_DEG / 360.0) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * robomas_upper_deg.gear_ratio;
     pid_reset(&robomas_upper_deg.rpm_pid);
   }
     
@@ -563,9 +572,12 @@ void lower_homing(){
     });
   }
 
-  if(robomas_lower_deg.state == ROBOMAS_HOMING && LOWER_ARM_DEG_UNDER_LIMIT_ON){
+  if(robomas_lower_deg.state == ROBOMAS_HOMING && LOWER_ARM_DEG_HOMING_LIMIT_ON){
     robomas_lower_deg.state = ROBOMAS_IDLE;
-    robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle;
+    // 原点となる偏角はLOWER_ARM_DEG_HOME_DEG(チームに応じてUNDER/OVERどちらの
+    // リミットスイッチかで変わる。common/arm/inc/arm.h参照。赤チームは0度なのでオフセット無し)。
+    robomas_lower_deg.total_angle_home = robomas_lower_deg.feedback.total_angle
+      - LOWER_ARM_DEG_ROBOMAS_DIRECTION * (LOWER_ARM_DEG_HOME_DEG / 360.0) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * robomas_lower_deg.gear_ratio;
     pid_reset(&robomas_lower_deg.rpm_pid);
   }
     
@@ -610,9 +622,12 @@ double get_r(robomas_t *rb)
 */
 robomas_t *set_robomas_homing_rpm(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->rpm_pid.sv = -LOWER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM * rb->gear_ratio;
+    // *_DEG_HOMING_DIRECTION_SIGNは，チームに応じてホーミング先をUNDER/OVERどちらの
+    // リミットスイッチにするか(=ROBOT_TEAM)で符号が変わる。DEG_ROBOMAS_DIRECTIONは
+    // 配線・機構で決まる固定値。
+    rb->rpm_pid.sv = LOWER_ARM_DEG_HOMING_DIRECTION_SIGN * LOWER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->rpm_pid.sv = -UPPER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
+    rb->rpm_pid.sv = UPPER_ARM_DEG_HOMING_DIRECTION_SIGN * UPPER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
     rb->rpm_pid.sv = -LOWER_ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
@@ -621,16 +636,28 @@ robomas_t *set_robomas_homing_rpm(robomas_t *rb){
   return rb;
 }
 /**
+* @brief 座標から偏角(度)を計算する．to_polar()の返り値は[0,2π)にラップされるため，
+*        可動域がdeg_min~deg_min+180度で360度(=0度)をまたぐ場合(青チームの場合の
+*        UPPER_ARM_DEG_MIN+RANGE=360等)，原点付近でdeg=0とdeg=360近辺の値が不連続に
+*        切り替わってしまう。deg_min未満なら360度を足し，可動域内で連続な値になるようにする。
+*/
+static double polar_deg_unwrapped(direct_t d, double deg_min){
+  double deg = to_polar(d).theta / (2 * M_PI) * 360.0;
+  if(deg < deg_min) deg += 360.0;
+  return deg;
+}
+
+/**
 * @brief 座標に対応するロボマスの角度(一周あたり8192)を座標から計算し，角度目標値svにセットする．
-* @return 正常なら引数を返す．異常ならNULL． 
+* @return 正常なら引数を返す．異常ならNULL．
 **/
 robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->ang_pid.sv = LOWER_ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = LOWER_ARM_DEG_ROBOMAS_DIRECTION * polar_deg_unwrapped(coordinate_lower, LOWER_ARM_DEG_MIN) / 360.0 * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
     rb->ang_pid.sv = LOWER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->ang_pid.sv = UPPER_ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = UPPER_ARM_DEG_ROBOMAS_DIRECTION * polar_deg_unwrapped(coordinate_upper, UPPER_ARM_DEG_MIN) / 360.0 * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
     rb->ang_pid.sv = UPPER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else{return NULL;}

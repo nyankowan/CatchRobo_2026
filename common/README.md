@@ -26,11 +26,13 @@ common/
 両アーム(Upper/Lower)に共通する物理パラメータと，ホーミング処理に関する定数をまとめる．
 
 - 可動域: `*_ARM_R_RANGE`, `*_ARM_R_MIN`, `*_ARM_DEG_RANGE`, `*_ARM_DEG_MIN`
-- 原点座標: `LOWER_ARM_HOME_COORDINATE`, `UPPER_ARM_HOME_COORDINATE`
+- 出場チーム: `ROBOT_TEAM`(`ROBOT_TEAM_RED`/`ROBOT_TEAM_BLUE`)
+- DEG軸のホーミング原点: `LOWER_ARM_DEG_HOME_DEG`, `UPPER_ARM_DEG_HOME_DEG`(`ROBOT_TEAM`で可動域の下限/上限どちらの端になるか変わる)
+- 原点座標: `LOWER_ARM_HOME_COORDINATE`, `UPPER_ARM_HOME_COORDINATE`(同じく`ROBOT_TEAM`依存)
 - ホーミングのタイムアウト・速度: `HOMING_*_ARM_TIMEOUT_MS`, `HOMING_*_DEG_RPM`, `HOMING_*_R_RPM`
 
-STM32(`robomas_controller`)とESP32(`arm_command.c`)の両方が，同じ可動域・同じタイムアウト値を参照するために存在する．
-どちらか一方だけ値を変えると，可動域チェックやタイムアウト判定がズレるので注意．
+STM32(`robomas_controller`/`lower_arm_servo`/`upper_arm_servo`)とESP32(`arm_command.c`)が，同じ可動域・同じタイムアウト値・同じ`ROBOT_TEAM`を参照するために存在する．
+どれか一つだけ値を変えると，可動域チェックやタイムアウト判定，DEG軸ホーミングのリミットスイッチ・回転方向がファームウェア間でズレるので注意．特に`ROBOT_TEAM`は出場チームに応じて書き換えた後，これを使う全ファームウェアを必ずビルド・書き込みし直すこと．
 
 ## can_protocol
 
