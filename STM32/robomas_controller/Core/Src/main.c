@@ -155,7 +155,8 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
 #define ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
-#define ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
+#define LOWER_ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
+#define UPPER_ARM_R_ROBOMAS_DIRECTION -1
 
 
 //ToDo: pullupしているので，導通したらRESET，していないならSETになる．リミットスイッチの接続によって変える．
@@ -484,7 +485,7 @@ void upper_homing(){
     
   if(robomas_upper_r.state == ROBOMAS_HOMING && UPPER_ARM_R_LIMIT_ON){
     robomas_upper_r.state = ROBOMAS_IDLE;
-    robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle - ARM_R_ROBOMAS_DIRECTION * UPPER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    robomas_upper_r.total_angle_home = robomas_upper_r.feedback.total_angle - UPPER_ARM_R_ROBOMAS_DIRECTION * UPPER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
     pid_reset(&robomas_upper_r.rpm_pid);
   }
 
@@ -547,7 +548,7 @@ void lower_homing(){
     
   if(robomas_lower_r.state == ROBOMAS_HOMING && LOWER_ARM_R_LIMIT_ON){
     robomas_lower_r.state = ROBOMAS_IDLE;
-    robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle  - ARM_R_ROBOMAS_DIRECTION * LOWER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
+    robomas_lower_r.total_angle_home = robomas_lower_r.feedback.total_angle - LOWER_ARM_R_ROBOMAS_DIRECTION * LOWER_ARM_R_MIN / (R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION;
     pid_reset(&robomas_lower_r.rpm_pid);
   }
 
@@ -574,7 +575,7 @@ double get_r(robomas_t *rb)
     double motor_angle =
         rb->feedback.total_angle - rb->total_angle_home;
 
-    return ARM_R_ROBOMAS_DIRECTION
+    return LOWER_ARM_R_ROBOMAS_DIRECTION
      * motor_angle
      / ROBOMAS_ANGLE_RESOLUTION
      * (R_ROBOMAS_DIAMETER * M_PI);
@@ -590,9 +591,9 @@ robomas_t *set_robomas_homing_rpm(robomas_t *rb){
   }else if(rb == &robomas_upper_deg){
     rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
-    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM * rb->gear_ratio;
+    rb->rpm_pid.sv = -LOWER_ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
-    rb->rpm_pid.sv = -ARM_R_ROBOMAS_DIRECTION * HOMING_UPPER_R_RPM * rb->gear_ratio;
+    rb->rpm_pid.sv = -UPPER_ARM_R_ROBOMAS_DIRECTION * HOMING_UPPER_R_RPM * rb->gear_ratio;
   }else{return NULL;}
   return rb;
 }
@@ -604,11 +605,11 @@ robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
   if(rb == &robomas_lower_deg){
     rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
-    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = LOWER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
     rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
-    rb->ang_pid.sv = ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = UPPER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else{return NULL;}
   return rb;
 }
