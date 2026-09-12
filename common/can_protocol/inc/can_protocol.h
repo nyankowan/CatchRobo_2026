@@ -67,6 +67,8 @@ typedef struct{
     int16_t x;//0-1
     int16_t y;//2-3
     int16_t z;//4-5
+    int8_t shaft_fine;//6 シャフト角度の微調整量(度)。L/Rボタンで加減算する
+    uint8_t shaft_rotate :1; //7 1:ハンドの向きを90度回転させる
 }upper_arm_t;
 
 typedef uint8_t can_sequence_t;
@@ -111,7 +113,7 @@ static inline can_dlc_t can_protocol_get_dlc(can_id_t id)
         return 1;
 
     case CAN_ID_UPPER_ARM_COMMAND:
-        return 6;
+        return 8;
 
     case CAN_ID_LOWER_ARM_COMMAND:
         return 6;

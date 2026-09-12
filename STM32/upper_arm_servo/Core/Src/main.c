@@ -141,7 +141,25 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
     // ホーミング原点(チームに応じて可動域の上限/下限どちらかになる)からの相対偏角(0~180度)を
     // 下のアームと同じ0~180度基準としてサーボへ反映する。
-    double shaft_theta = shaft_deg_from_home(direct) * M_PI / 180.0;
+    double shaft_deg = shaft_deg_from_home(direct);
+
+    // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる。
+    // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，回転方向側の残り90度分の
+    // 余裕を超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
+    // パルス幅がクランプされ，それ以上は回転しない(lower_arm_servoのShaftと同様，毎回サーボを
+    // 取り替える運用はしない)。
+    // 整理機構は赤/青チームで左右逆側に取り付けるため(arm.h参照)，余裕が生まれる側(=回転
+    // させる方向)もチームで逆になる。青は+90度(高いパルス側に余裕)，赤は-90度(低いパルス側に
+    // 余裕)とする。
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
+    if(rx_data.upper_arm.shaft_rotate){shaft_deg += 90.0;}
+#else
+    if(rx_data.upper_arm.shaft_rotate){shaft_deg -= 90.0;}
+#endif
+    // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
+    shaft_deg += rx_data.upper_arm.shaft_fine;
+
+    double shaft_theta = shaft_deg * M_PI / 180.0;
     double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
     double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 

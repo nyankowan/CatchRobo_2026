@@ -68,7 +68,11 @@ void lower_arm_move(
     int16_t d_shaft_fine,
     bool shaft_rotate_toggle
 );
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz);
+void upper_arm_move(
+    int16_t dx, int16_t dy, int16_t dz,
+    int16_t d_shaft_fine,
+    bool shaft_rotate_toggle
+);
 
 esp_err_t send_lower_arm();
 esp_err_t send_upper_arm();
@@ -78,7 +82,7 @@ esp_err_t upper_arm_homing();
 void arms_update();
 ```
 
-- `upper_arm_move()` : 差分入力(dx, dy, dz)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．ホーミング中は無視する．
+- `upper_arm_move()` : 座標の差分入力(dx, dy)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．Zは(dz)を`UPPER_ARM_Z_MIN`~`UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE`にクランプしながら加算する．ハンドの向きは，`d_shaft_fine`(L/Rの押しっぱなしで±`UPPER_ARM_SHAFT_FINE_MAX_DEG`の範囲に収まるよう加減算する微調整量，度)と，`shaft_rotate_toggle`(ZL/ZRボタンのPRESSEDエッジ)で90度回転させる`shaft_rotate`の2段構えで制御する(下記`lower_arm_move()`のシャフト制御と同様，回転量が180度から90度になっている点のみ異なる)．ホーミング中は無視する．
 - `lower_arm_move()` : 座標(dx, dy)の扱いは`upper_arm_move()`と同様．Left/Middle/Rightの各ハンドは`left_pressed`/`middle_pressed`/`right_pressed`(ボタンのPRESSEDエッジ)を受け取り，シングルクリックでHAND_STATE_CATCH↔HAND_STATE_HOLDを，ダブルクリック(`DOUBLE_CLICK_WINDOW_MS`=300ms以内の2回目の押下)でHAND_STATE_HOLD↔HAND_STATE_RELEASEをトグルする．3本ともHAND_STATE_HOLDのときに`release_all_pressed`(プラスボタン)を受け取ると3本同時にHAND_STATE_RELEASEへ切り替える(いずれかがHAND_STATE_CATCHのときは切り替わらない)．Expandは，トグル入力(ボタンのPRESSEDエッジ)で切り替える．シャフトの向きは，`d_shaft_fine`(L/Rの押しっぱなしで±`LOWER_ARM_SHAFT_FINE_MAX_DEG`の範囲に収まるよう加減算する微調整量，度)と，`shaft_rotate_toggle`(ZL/ZRボタンのPRESSEDエッジ)で180度回転させる`shaft_rotate`の2段構えで制御する．ホーミング中は座標もハンド・シャフト操作も無視する．
 - `send_lower_arm()` / `send_upper_arm()` : 現在座標をCANで送信する．ホーミング中は送信しない．
 - `lower_arm_homing()` / `upper_arm_homing()` : ホーミング要求(`HOMING`)をSTM32(robomas_controller)に送信する．
