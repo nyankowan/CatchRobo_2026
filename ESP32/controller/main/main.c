@@ -143,7 +143,7 @@ void main_task(void* arg){
         upper_arm_move(
             upper_mypad.RIGHT - upper_mypad.LEFT + upper_mypad.LX/STICK_SCALE,
             upper_mypad.UP -    upper_mypad.DOWN - upper_mypad.LY/STICK_SCALE,
-            upper_mypad.A -     upper_mypad.B
+            upper_mypad.A * 4 - upper_mypad.B * 4
         );
         send_upper_arm();
 
