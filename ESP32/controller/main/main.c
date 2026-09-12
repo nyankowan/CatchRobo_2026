@@ -86,6 +86,11 @@ int app_main(void) {
 #define LOWER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
 #define UPPER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
 #define UPPER_HAND_FINE_STEP_DEG 4
+#define ASSEMBLE_DEG_STEP 2 //X/Yボタン押しっぱなし時の整理機構角度の変化量(度/ループ)
+
+// 整理機構(Assemble)サーボへの現在の指令角度(0~ASSEMBLE_DEG_RANGE度)。main_taskで更新し，dump_taskからも参照する。
+static uint8_t assemble_deg = 0;
+
 void dump_task(void* arg){
     mypad_t mp[MAX_MYPAD] = {0};
     while(1){
@@ -97,6 +102,7 @@ void dump_task(void* arg){
         mypad_dump(&mp[1]);
         logi("\n");
         arms_dump();
+        logi("assemble_deg: %3d\n", assemble_deg);
         micon_connection_dump();
         logi("\n");
         vTaskDelay(pdMS_TO_TICKS(DUMP_TASK_LOOP_MS));
@@ -151,8 +157,18 @@ void main_task(void* arg){
         );
         send_upper_arm();
 
-        if(upper_mypad.X)can_tx(&(can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 90});
-        if(upper_mypad.Y)can_tx(&(can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 0});
+        // 整理機構(Assemble): PLUS/MINUSで90度/0度に即座に切り替え，X/Yは押しっぱなしの間90度側/0度側へ徐々に移動
+        if(PRESSED(upper_mypad.PLUS,  upper_prev_mypad.PLUS))  assemble_deg = ASSEMBLE_DEG_RANGE;
+        if(PRESSED(upper_mypad.MINUS, upper_prev_mypad.MINUS)) assemble_deg = 0;
+        if(upper_mypad.X){
+            int16_t deg = (int16_t)assemble_deg + ASSEMBLE_DEG_STEP;
+            assemble_deg = (deg > ASSEMBLE_DEG_RANGE) ? ASSEMBLE_DEG_RANGE : (uint8_t)deg;
+        }
+        if(upper_mypad.Y){
+            int16_t deg = (int16_t)assemble_deg - ASSEMBLE_DEG_STEP;
+            assemble_deg = (deg < 0) ? 0 : (uint8_t)deg;
+        }
+        can_tx(&(can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = assemble_deg});
 
         micon_connection_update();
         arms_update();
