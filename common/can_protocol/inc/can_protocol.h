@@ -67,6 +67,15 @@ typedef struct{
     int16_t x;//0-1
     int16_t y;//2-3
     int16_t z;//4-5
+    union{
+        uint8_t flags;//6
+        struct{
+            //1:シャフトの向きを180度回転させる。可動範囲(180度)を超える分は
+            //STM32(upper_arm_servo)側でクランプされ，回転は適用されない
+            uint8_t shaft_rotate :1;
+            uint8_t              :7;
+        };
+    };
 }upper_arm_t;
 
 typedef uint8_t can_sequence_t;
@@ -111,7 +120,7 @@ static inline can_dlc_t can_protocol_get_dlc(can_id_t id)
         return 1;
 
     case CAN_ID_UPPER_ARM_COMMAND:
-        return 6;
+        return 7;
 
     case CAN_ID_LOWER_ARM_COMMAND:
         return 6;

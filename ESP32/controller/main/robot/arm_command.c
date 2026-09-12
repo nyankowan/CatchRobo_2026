@@ -170,7 +170,7 @@ void lower_arm_move(
 
 
 // homing中は動かない
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
+void upper_arm_move(int16_t dx, int16_t dy, int16_t dz, bool shaft_rotate_toggle){
     if (upper_arm_homing_in_progress)return;
 
     direct_t d = {
@@ -192,6 +192,12 @@ void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
     if(z < UPPER_ARM_Z_MIN) z = UPPER_ARM_Z_MIN;
     if(z > UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE) z = UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE;
     upper_arm.z = (int16_t)z;
+
+    // シャフトの向きを180度回転させる。270度サーボのうち普段使うのは180度分だけなので，
+    // 残り90度分の余裕を超える(=可動範囲の反対側までは回転しきれない)アーム角度では
+    // STM32(upper_arm_servo)側でパルス幅がクランプされ，回転が適用されない(毎回サーボを
+    // 取り替える運用はしない)。
+    if(shaft_rotate_toggle) {TOGGLE(upper_arm.shaft_rotate, 1);}
 }
 
 
@@ -443,6 +449,7 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
     upper_arm.x = uarm.x;
     upper_arm.y = uarm.y;
+    upper_arm.shaft_rotate = 0; // homingでシャフトの向きは基準位置に戻るので回転も解除する
 
     if (data->homing_sequence != upper_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG, "upper homing DONE sequence error: rx=%u expected=%u",
@@ -587,12 +594,13 @@ void upper_arm_dump(){
     );
 
     logi(
-        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d\n",
+        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d, shaft_rotate %1d\n",
         upper_arm.x,
         upper_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
-        upper_arm.z
+        upper_arm.z,
+        upper_arm.shaft_rotate
     );
 }
 

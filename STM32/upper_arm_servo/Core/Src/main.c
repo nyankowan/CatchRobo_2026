@@ -127,6 +127,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     // ホーミング原点(チームに応じて可動域の上限/下限どちらかになる)からの相対偏角(0~180度)を
     // 下のアームと同じ0~180度基準としてサーボへ反映する。
     double shaft_theta = shaft_deg_from_home(direct) * M_PI / 180.0;
+    // shaft_rotate=1のとき，ハンドの向きを180度回転させる。270度サーボのうち
+    // 普段使うのは可動範囲分の180度だけなので，残り90度分の余裕を超える
+    // (=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
+    // パルス幅がSERVO_270にクランプされ，それ以上は回転しない
+    // (サーボの取り替えなしでこの制約を許容する)。
+    if(rx_data.upper_arm.shaft_rotate){shaft_theta += M_PI;}
     double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
     double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 

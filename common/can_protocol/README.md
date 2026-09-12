@@ -44,7 +44,7 @@ CANの調停仕様により，CAN IDが小さいメッセージほど高い優�
 | `0x025` | `LOWER_HOMING_DONE_ACK`        |   1 | Lower Arm Homing完了通知の確認  |
 | `0x026` | `LOWER_HOMING_DONE`            |   1 | Lower Arm Homing完了通知     |
 | `0x100` | `UPPER_ARM_COMMAND`            |   7 | Upper Armへの操作指令          |
-| `0x101` | `LOWER_ARM_COMMAND`            |   5 | Lower Armへの操作指令          |
+| `0x101` | `LOWER_ARM_COMMAND`            |   6 | Lower Armへの操作指令          |
 | `0x102` | `ASSEMBLE_COMMAND`             |   1 | Assemble機構への操作指令         |
 | `0x3F0` | `ERROR_CODE`                   |   1 | エラー通知                    |
 
@@ -164,16 +164,17 @@ sequence numberは `0` ～ `255` を循環して使用する．
 ### DLC
 
 ```text
-6
+7
 ```
 
 ### データフォーマット
 
-| Byte | Type      | Name | Description |
-| ---: | --------- | ---- | ----------- |
-|  0-1 | `int16_t` | `x`  | X方向指令 (mm)  |
-|  2-3 | `int16_t` | `y`  | Y方向指令 (mm)  |
-|  4-5 | `int16_t` | `z`  | Z方向指令 (mm)  |
+| Byte | Type      | Name    | Description |
+| ---: | --------- | ------- | ----------- |
+|  0-1 | `int16_t` | `x`     | X方向指令 (mm)  |
+|  2-3 | `int16_t` | `y`     | Y方向指令 (mm)  |
+|  4-5 | `int16_t` | `z`     | Z方向指令 (mm)  |
+|    6 | `uint8_t` | `flags` | フラグ         |
 
 すべてLittle-endianで格納する．
 
@@ -186,7 +187,18 @@ Byte 3 : y MSB
 
 Byte 4 : z LSB
 Byte 5 : z MSB
+
+Byte 6 : flags
 ```
+
+`flags`は各bitを以下のように使用する．
+
+| Bit | Name           | Description                   |
+| --: | -------------- | ------------------------------ |
+|   0 | `shaft_rotate` | 1:ハンドの向きを180度回転させる |
+| 1-7 | (未使用)        | 常に0                          |
+
+`shaft_rotate=1`でも常に180度回転が適用されるとは限らない．ホーミング原点からの相対偏角(0~180度)に180度を加算してサーボのパルス幅に変換するため，元の相対偏角が90度を超える場合は反対側までパルス幅が足りず，可動域(`SERVO_0`~`SERVO_270`)の上限でクランプされて回転が適用されない．そのたびにサーボを取り替える運用はせず，この制約をそのまま許容する．詳細は[STM32/upper_arm_servo/README.md](../../STM32/upper_arm_servo/README.md)を参照．
 
 C言語上では `upper_arm_t` として表現する．
 
@@ -195,6 +207,13 @@ typedef struct {
     int16_t x;
     int16_t y;
     int16_t z;
+    union {
+        uint8_t flags;
+        struct {
+            uint8_t shaft_rotate : 1;
+            uint8_t              : 7;
+        };
+    };
 } upper_arm_t;
 ```
 
