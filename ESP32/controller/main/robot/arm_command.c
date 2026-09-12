@@ -157,7 +157,14 @@ void lower_arm_move(
         lower_arm.left   = HAND_STATE_RELEASE;
         lower_arm.middle = HAND_STATE_RELEASE;
         lower_arm.right  = HAND_STATE_RELEASE;
-    }
+    }else if(release_all_pressed &&
+       lower_arm.left   == HAND_STATE_RELEASE &&
+       lower_arm.middle == HAND_STATE_RELEASE &&
+       lower_arm.right  == HAND_STATE_RELEASE){
+        lower_arm.left   = HAND_STATE_HOLD;
+        lower_arm.middle = HAND_STATE_HOLD;
+        lower_arm.right  = HAND_STATE_HOLD;
+       }
 
     if(expand_toggle)       {TOGGLE(lower_arm.expand, 1);}
     if(shaft_rotate_toggle) {TOGGLE(lower_arm.shaft_rotate, 1);} // ハンドの向きを180度回転させる
