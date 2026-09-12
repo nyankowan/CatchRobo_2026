@@ -95,7 +95,7 @@ Main Controller                     Robomas Controller
 
 ### Homing処理
 - `HOMING_UPPER_DEG_RPM` / `HOMING_LOWER_DEG_RPM` / `HOMING_UPPER_R_RPM` / `HOMING_LOWER_R_RPM` (`common/arm/inc/arm.h`)で指定される回転数でリミットスイッチ方向へ回転する．
-- リミットスイッチ検出で`ROBOMAS_IDLE`に遷移し，その時点のロボマス角度を極座標原点(r軸は`*_ARM_R_MIN`を考慮したオフセット付き)として記録する．
+- リミットスイッチ検出で`ROBOMAS_IDLE`に遷移し，その時点のロボマス角度を極座標原点として記録する．r軸は`*_ARM_R_MIN`，上アームのdeg軸は`UPPER_ARM_DEG_MIN`(上アームはハンドの取り付け側が下アームと逆で偏角の可動域が180~360度になるため)を考慮したオフセット付き．
 - `HOMING_UPPER_ARM_TIMEOUT_MS` / `HOMING_LOWER_ARM_TIMEOUT_MS`(いずれも10000ms)以内にリミットスイッチを検出できなければ，両軸を`ROBOMAS_INITIAL`に戻し，`CAN_ID_ERROR_CODE`(`CAN_ERROR_*_HOMING_TIMEOUT`)を送信する．リミットスイッチ故障や配線不良で無限に回転し続けることを防ぐための仕組み．
 - このタイムアウト通知は，一度のホーミング試行につき`upper/lower_homing_timeout_notified`フラグにより1回だけ送信される．`ROBOMAS_ERROR`(フィードバック途絶)状態の軸は上書きせずそのまま`robomas_update()`に管理を委ねるため，タイムアウト処理と`ROBOMAS_ERROR`検知が互いの状態を打ち消し合って`CAN_ID_ERROR_CODE`を送り続ける(スパムする)ことがない．フラグは新しいホーミング要求を受理した時点でリセットされる．
 

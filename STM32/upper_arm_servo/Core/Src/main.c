@@ -107,7 +107,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   switch (rx_header.StdId) {
   case CAN_ID_UPPER_ARM_COMMAND: {
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
-    double shaft_theta = to_polar(direct).theta;
+    // 上のアームはハンドの取り付け側が下のアームと逆(180度回転してついている)ため，
+    // 偏角(0~2π，可動域はUPPER_ARM_DEG_MIN~MIN+RANGE=180~360度)から
+    // 可動域下限(UPPER_ARM_DEG_MIN)を引いて，下のアームと同じ0~180度基準に揃えてからサーボへ反映する。
+    double shaft_theta = to_polar(direct).theta - (UPPER_ARM_DEG_MIN * M_PI / 180.0);
     double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
     double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 

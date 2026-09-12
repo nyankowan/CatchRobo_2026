@@ -22,8 +22,11 @@
   .x = LOWER_ARM_R_MIN,\
   .y = 0,\
 }
+// 上のアームはハンドの取り付け側が下のアームと逆(180度回転してついている)ため，
+// 偏角の可動域が180~360度(UPPER_ARM_DEG_MIN~MIN+RANGE)になる。
+// ホーミング原点(可動域下限=180度)に対応する座標はx軸負方向になる。
 #define UPPER_ARM_HOME_COORDINATE {\
-  .x = UPPER_ARM_R_MIN,\
+  .x = -UPPER_ARM_R_MIN,\
   .y = 0,\
 }
 

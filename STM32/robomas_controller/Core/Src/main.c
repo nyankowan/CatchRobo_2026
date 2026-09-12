@@ -481,7 +481,12 @@ void upper_homing(){
 
   if(robomas_upper_deg.state == ROBOMAS_HOMING && UPPER_ARM_DEG_UNDER_LIMIT_ON){
     robomas_upper_deg.state = ROBOMAS_IDLE;
-    robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle;
+    // 上のアームはハンドの取り付け側が下のアームと逆なため，偏角の下限(UPPER_ARM_DEG_MIN=180度)が
+    // リミットスイッチ位置になる。R軸のUPPER_ARM_R_MINオフセットと同様に，
+    // set_robomas_deg_from_coordinate()がtheta=0基準で計算するsvと辻褄が合うよう，
+    // ここでtheta=UPPER_ARM_DEG_MIN分のオフセットをtotal_angle_homeへ焼き込む。
+    robomas_upper_deg.total_angle_home = robomas_upper_deg.feedback.total_angle
+      - UPPER_ARM_DEG_ROBOMAS_DIRECTION * (UPPER_ARM_DEG_MIN / 360.0) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * robomas_upper_deg.gear_ratio;
     pid_reset(&robomas_upper_deg.rpm_pid);
   }
     
