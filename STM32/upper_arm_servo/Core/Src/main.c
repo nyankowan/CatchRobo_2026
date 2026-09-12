@@ -126,8 +126,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
     // ホーミング原点(チームに応じて可動域の上限/下限どちらかになる)からの相対偏角(0~180度)を
     // 下のアームと同じ0~180度基準としてサーボへ反映する。
+    // 実機でShaftサーボの回転方向が下のアームと逆だったため，SERVO_270を基準に
+    // 相対偏角が大きいほどパルス幅が小さくなるよう反転させる(原点(相対偏角0)がSERVO_270)。
     double shaft_theta = shaft_deg_from_home(direct) * M_PI / 180.0;
-    double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+    double shaft_pulse = SERVO_270 - shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2);
     double z_pulse = rx_data.upper_arm.z * (SERVO_270 - SERVO_0) / (UPPER_ARM_Z_SERVO_GEAR_DIAMETER * 3 * M_PI_4) + SERVO_0;
 
     bool out_of_range = false;
@@ -140,7 +142,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 
   case CAN_ID_UPPER_HOMING:
     // Zは現在位置を維持し，Shaftのみ原点へ戻す
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    // (Shaftの回転方向反転により，原点(相対偏角0)のパルス幅はSERVO_270になった)
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_270);
     break;
 
   default:
