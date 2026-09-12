@@ -40,8 +40,8 @@ static hand_click_state_t right_click_state = {0};
 #define DOUBLE_CLICK_WINDOW_MS 300
 
 // シャフト角度の微調整(shaft_fine)の可動域(±度)
-#define LOWER_ARM_SHAFT_FINE_MAX_DEG 15
-#define UPPER_ARM_SHAFT_FINE_MAX_DEG 15
+#define LOWER_ARM_SHAFT_FINE_MAX_DEG 45
+#define UPPER_ARM_SHAFT_FINE_MAX_DEG 45
 
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
