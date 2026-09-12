@@ -99,6 +99,9 @@ Main Controller                     Robomas Controller
 - `HOMING_UPPER_ARM_TIMEOUT_MS` / `HOMING_LOWER_ARM_TIMEOUT_MS`(いずれも10000ms)以内にリミットスイッチを検出できなければ，両軸を`ROBOMAS_INITIAL`に戻し，`CAN_ID_ERROR_CODE`(`CAN_ERROR_*_HOMING_TIMEOUT`)を送信する．リミットスイッチ故障や配線不良で無限に回転し続けることを防ぐための仕組み．
 - このタイムアウト通知は，一度のホーミング試行につき`upper/lower_homing_timeout_notified`フラグにより1回だけ送信される．`ROBOMAS_ERROR`(フィードバック途絶)状態の軸は上書きせずそのまま`robomas_update()`に管理を委ねるため，タイムアウト処理と`ROBOMAS_ERROR`検知が互いの状態を打ち消し合って`CAN_ID_ERROR_CODE`を送り続ける(スパムする)ことがない．フラグは新しいホーミング要求を受理した時点でリセットされる．
 
+### DEG軸のホーミング方向とROBOT_TEAM
+赤/青チームは互いに向かい合わせの鏡合わせ構造(整理機構を逆側に付け替え，機体を反転して取り付ける)であり，鏡映はDEG軸(回転)の向き(ハンドル性)を反転させるため，`LOWER_ARM_DEG_ROBOMAS_DIRECTION` / `UPPER_ARM_DEG_ROBOMAS_DIRECTION`はチームに応じて符号を反転させる必要がある．そのため`STM32/lower_arm_servo`と同じ`ROBOT_TEAM`(`ROBOT_TEAM_RED`/`ROBOT_TEAM_BLUE`)マクロをこのファームウェアにも持たせ，出場チームに応じて書き換えてビルド・書き込みする．R軸(アームの伸縮，並進)は鏡映でも向きが変わらないため，チームに依らず固定．**両ファームウェア(`robomas_controller`と`lower_arm_servo`)の`ROBOT_TEAM`は必ず同じ値にすること．**
+
 ### HOMING_DONE送信 → HOMING_DONE_ACK待ち
 - 両軸が`ROBOMAS_IDLE`になった瞬間，`ROBOMAS_READY`に遷移すると同時に，保持していたsequence numberで`HOMING_DONE`を送信する．
 - `HOMING_DONE_ACK_RETRY_MS`(200ms)ごとに`HOMING_DONE_ACK`の到着を確認し，届いていなければ`HOMING_DONE`を再送する．最大`HOMING_DONE_ACK_MAX_RETRY`(5回)まで再送し，それでも届かなければ諦める(この場合もアーム自体は`ROBOMAS_READY`のまま動作可能)．

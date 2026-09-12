@@ -154,9 +154,25 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_M2_GEAR_RATIO 36              //M2006
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
+// 出場チーム(青/赤)。競技開始前に決定した後は変更しない。
+// 緊急停止スイッチが押されるとESP32/STM32(robomas_controller)は再起動するため，
+// 実行時にトグルする方式では状態を保持できない。そのため，チームに応じてこの値を
+// 書き換えてビルド・書き込みすることで固定する。(STM32/lower_arm_servoと同じ方式)
+#define ROBOT_TEAM_BLUE 0
+#define ROBOT_TEAM_RED  1
+#define ROBOT_TEAM ROBOT_TEAM_RED  //出場チームに応じて書き換えてビルドする
+
 //上下でロボマスの取り付け向きが逆なため，R軸と同様にDEG軸も上下で別定数にして符号を反転する
-#define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
+//さらに，赤/青チームは互いに向かい合わせの鏡合わせ構造(機体を反転して取り付けている)であり，
+//鏡映はDEG軸(回転)の向き(ハンドル性)を反転させるため，DEG軸の符号はチームでも反転させる必要がある。
+//R軸(アームの伸縮，並進)は鏡映でも向きが変わらないため，チームに依らず固定でよい。
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
+#define LOWER_ARM_DEG_ROBOMAS_DIRECTION -1
+#define UPPER_ARM_DEG_ROBOMAS_DIRECTION 1
+#else
+#define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき(赤チーム基準)
 #define UPPER_ARM_DEG_ROBOMAS_DIRECTION -1
+#endif
 #define LOWER_ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
 #define UPPER_ARM_R_ROBOMAS_DIRECTION -1
 
