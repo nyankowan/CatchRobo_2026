@@ -164,16 +164,18 @@ sequence numberは `0` ～ `255` を循環して使用する．
 ### DLC
 
 ```text
-6
+8
 ```
 
 ### データフォーマット
 
-| Byte | Type      | Name | Description |
-| ---: | --------- | ---- | ----------- |
-|  0-1 | `int16_t` | `x`  | X方向指令 (mm)  |
-|  2-3 | `int16_t` | `y`  | Y方向指令 (mm)  |
-|  4-5 | `int16_t` | `z`  | Z方向指令 (mm)  |
+| Byte | Type      | Name           | Description |
+| ---: | --------- | -------------- | ----------- |
+|  0-1 | `int16_t` | `x`            | X方向指令 (mm)  |
+|  2-3 | `int16_t` | `y`            | Y方向指令 (mm)  |
+|  4-5 | `int16_t` | `z`            | Z方向指令 (mm)  |
+|    6 | `int8_t`  | `shaft_fine`   | シャフト角度の微調整量(度) |
+|    7 | `uint8_t` (bit 0) | `shaft_rotate` | 1:ハンドの向きを90度回転させる |
 
 すべてLittle-endianで格納する．
 
@@ -186,7 +188,15 @@ Byte 3 : y MSB
 
 Byte 4 : z LSB
 Byte 5 : z MSB
+
+Byte 6 : shaft_fine
+
+Byte 7 : shaft_rotate (bit 0のみ使用)
 ```
+
+`shaft_rotate=1`は常に90度回転が適用されるとは限らない．下のアームの`shaft_rotate`(180度回転)と同様，出場チーム(青/赤)ごとに定まる，サーボの可動域内に収まるアーム偏角の範囲でのみ受信側(STM32/upper_arm_servo)が回転を適用する．
+
+`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-15`～`15`とする．
 
 C言語上では `upper_arm_t` として表現する．
 
@@ -195,6 +205,8 @@ typedef struct {
     int16_t x;
     int16_t y;
     int16_t z;
+    int8_t shaft_fine;
+    uint8_t shaft_rotate : 1;
 } upper_arm_t;
 ```
 

@@ -41,6 +41,7 @@ static hand_click_state_t right_click_state = {0};
 
 // シャフト角度の微調整(shaft_fine)の可動域(±度)
 #define LOWER_ARM_SHAFT_FINE_MAX_DEG 15
+#define UPPER_ARM_SHAFT_FINE_MAX_DEG 15
 
 static void lower_arm_homing_done_notify(const can_data_t *data);
 static void upper_arm_homing_done_notify(const can_data_t *data);
@@ -170,7 +171,11 @@ void lower_arm_move(
 
 
 // homing中は動かない
-void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
+void upper_arm_move(
+    int16_t dx, int16_t dy, int16_t dz,
+    int16_t d_shaft_fine,
+    bool shaft_rotate_toggle
+){
     if (upper_arm_homing_in_progress)return;
 
     direct_t d = {
@@ -192,6 +197,14 @@ void upper_arm_move(int16_t dx, int16_t dy, int16_t dz){
     if(z < UPPER_ARM_Z_MIN) z = UPPER_ARM_Z_MIN;
     if(z > UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE) z = UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE;
     upper_arm.z = (int16_t)z;
+
+    if(shaft_rotate_toggle) {TOGGLE(upper_arm.shaft_rotate, 1);} // ハンドの向きを90度回転させる
+
+    // シャフト角度の微調整。L/Rの押しっぱなしで±UPPER_ARM_SHAFT_FINE_MAX_DEGの範囲に収める
+    int32_t fine = (int32_t)upper_arm.shaft_fine + d_shaft_fine;
+    if(fine < -UPPER_ARM_SHAFT_FINE_MAX_DEG) fine = -UPPER_ARM_SHAFT_FINE_MAX_DEG;
+    if(fine >  UPPER_ARM_SHAFT_FINE_MAX_DEG) fine =  UPPER_ARM_SHAFT_FINE_MAX_DEG;
+    upper_arm.shaft_fine = (int8_t)fine;
 }
 
 
@@ -443,6 +456,8 @@ static void upper_arm_homing_done_notify(const can_data_t *data){
     direct_t uarm = UPPER_ARM_HOME_COORDINATE;
     upper_arm.x = uarm.x;
     upper_arm.y = uarm.y;
+    upper_arm.shaft_rotate = 0; // homingでハンドの向きは基準位置に戻るので回転も解除する
+    upper_arm.shaft_fine = 0;   // 微調整オフセットも基準位置(0度)へ戻す
 
     if (data->homing_sequence != upper_arm_homing_sequence) {
         ESP_LOGE(ARM_TAG, "upper homing DONE sequence error: rx=%u expected=%u",
@@ -587,12 +602,14 @@ void upper_arm_dump(){
     );
 
     logi(
-        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d\n",
+        "upper_arm: CART(%4dmm,%4dmm), POR(%4.2f,%3.2f°), Z %d, shaft_rotate %1d, shaft_fine %3d\n",
         upper_arm.x,
         upper_arm.y,
         pol.r,
         pol.theta / (2 * M_PI) * 360,
-        upper_arm.z
+        upper_arm.z,
+        upper_arm.shaft_rotate,
+        upper_arm.shaft_fine
     );
 }
 
