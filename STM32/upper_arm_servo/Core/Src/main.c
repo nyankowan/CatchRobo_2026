@@ -99,33 +99,42 @@ static uint32_t clamp_servo_pulse(double pulse, bool *out_of_range){
 }
 
 /**
-* @brief 座標からハンド取り付け原点(UPPER_ARM_DEG_HOME_DEG，common/arm/inc/arm.h参照)を
-*        基準にした相対偏角(度，0~UPPER_ARM_DEG_RANGE)を計算する．
+* @brief 座標から，Shaftサーボの目標角度(度，0~270度のうちSERVO角度と対応する値)を計算する．
 *
-*        赤チーム: 原点=UPPER_ARM_DEG_MIN(可動域下限)。偏角からUPPER_ARM_DEG_MINを引くだけ。
-*        青チーム: 原点=UPPER_ARM_DEG_MIN+RANGE(可動域上限，360度=coordinate.hのto_polar()の
-*        値域[0,2π)では0度としてラップされる)。ラップにより偏角が0度付近で不連続にならないよう，
-*        UPPER_ARM_DEG_MIN未満の値には360度を足してから差を取る。
+*        Shaftは可動範囲270度のうち中央の180度(45~225度)だけを通常使用域とし，アームの
+*        可動域(UPPER_ARM_DEG_MIN~UPPER_ARM_DEG_MIN+UPPER_ARM_DEG_RANGE)の中央
+*        (=アームが真下向きの位置)がShaft使用域の中央(135度)に一致するよう，偏角から
+*        オフセットを引くだけの単純な線形対応にする(fabs等で折り返さない)。
+*        これによりアームの回転方向とShaftの回転方向が常に一致し，かつ計算式自体は
+*        チームによらず共通になる(チーム差はarm.hのUPPER_ARM_HOME_COORDINATEが
+*        可動域のどちら側の座標になるかにのみ現れる)。
 *
-*        どちらの場合も差の絶対値を取ることで，原点からの回転量(0~180度)として扱える。
+*        赤チームのホーミング原点(UPPER_ARM_DEG_MIN=180度)ではSERVO_45，
+*        青チームのホーミング原点(UPPER_ARM_DEG_MIN+RANGE=360度)ではSERVO_225になる。
+*
+*        360度=coordinate.hのto_polar()の値域[0,2π)では0度としてラップされるため，
+*        偏角が0度付近で不連続にならないよう，UPPER_ARM_DEG_MIN未満の値には360度を
+*        足してから使う。
 */
-static double shaft_deg_from_home(direct_t direct){
+static double shaft_deg_from_arm_deg(direct_t direct){
   double deg = to_polar(direct).theta / (2 * M_PI) * 360.0;
   if(deg < UPPER_ARM_DEG_MIN) deg += 360.0;
-  return fabs(deg - UPPER_ARM_DEG_HOME_DEG);
+  // アーム可動域の中央(真下向き)をShaft使用域の中央(135度)に合わせるオフセット
+  return deg - (UPPER_ARM_DEG_MIN + UPPER_ARM_DEG_RANGE / 2.0) + 135.0;
 }
 
 /**
 * @brief ホーミング原点(UPPER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
 *        Shaftのパルス幅を計算する。
-*        UPPER_ARM_HOME_COORDINATEをshaft_deg_from_home()に通すと，定義上必ず原点からの
-*        相対偏角0度になる(=CAN_ID_UPPER_ARM_COMMAND側の計算式でSERVO_0になる)ため，
-*        本来SERVO_0を直接使っても結果は同じだが，下アーム(shaft_home_pulse())と実装を
-*        揃えて，ホーミング開始時点からホーミング原点と同じ向きであることを明示している。
+*        UPPER_ARM_HOME_COORDINATEをshaft_deg_from_arm_deg()に通すと，赤チームでは
+*        SERVO_45相当，青チームではSERVO_225相当の角度になる(=CAN_ID_UPPER_ARM_COMMAND
+*        側の計算式で得られる値と同じ)。下アーム(shaft_home_pulse())と同様，ホーミング
+*        開始時点からホーミング原点と同じ向きにしておくことで，ホーミング完了時に
+*        ハンドの向きが変わらないようにする。
 */
 static uint32_t shaft_home_pulse(){
   direct_t home = UPPER_ARM_HOME_COORDINATE;
-  double shaft_theta = shaft_deg_from_home(home) * M_PI / 180.0;
+  double shaft_theta = shaft_deg_from_arm_deg(home) * M_PI / 180.0;
   double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
   return (uint32_t)shaft_pulse;
 }
@@ -139,9 +148,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   switch (rx_header.StdId) {
   case CAN_ID_UPPER_ARM_COMMAND: {
     direct_t direct = {.x = rx_data.upper_arm.x, .y = rx_data.upper_arm.y};
-    // ホーミング原点(チームに応じて可動域の上限/下限どちらかになる)からの相対偏角(0~180度)を
-    // 下のアームと同じ0~180度基準としてサーボへ反映する。
-    double shaft_deg = shaft_deg_from_home(direct);
+    // アームの偏角を，真下向き(270度)がShaft135度になるようオフセットした角度にして
+    // そのままサーボへ反映する(shaft_deg_from_arm_deg()参照)。
+    double shaft_deg = shaft_deg_from_arm_deg(direct);
 
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを90度回転させる。
     // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，回転方向側の残り90度分の

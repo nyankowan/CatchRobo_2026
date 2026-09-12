@@ -113,6 +113,27 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 /**
+* @brief 座標から，Shaftサーボの目標角度(度，0~270度のうちSERVO角度と対応する値)を計算する．
+*        (upper_arm_servoのshaft_deg_from_arm_deg()と同じ考え方。そちらも参照)
+*
+*        Shaftは可動範囲270度のうち中央の180度(45~225度)だけを通常使用域とし，アームの
+*        可動域(LOWER_ARM_DEG_MIN~LOWER_ARM_DEG_MIN+LOWER_ARM_DEG_RANGE)の中央
+*        (=アームが真上向きの位置，偏角90度)がShaft使用域の中央(135度)に一致するよう，
+*        偏角にオフセットを足すだけの単純な線形対応にする。
+*
+*        LOWER_ARM_DEG_MINは0度で，かつto_polar()の値域[0,2π)の境界と重ならないため，
+*        upper_arm_servoと違い0度付近のラップ補正は不要。
+*
+*        赤チームのホーミング原点(LOWER_ARM_DEG_MIN=0度)ではSERVO_45，
+*        青チームのホーミング原点(LOWER_ARM_DEG_MIN+RANGE=180度)ではSERVO_225になる。
+*/
+static double shaft_deg_from_arm_deg(direct_t direct){
+  double deg = to_polar(direct).theta / (2 * M_PI) * 360.0;
+  // アーム可動域の中央(真上向き)をShaft使用域の中央(135度)に合わせるオフセット
+  return deg - (LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE / 2.0) + 135.0;
+}
+
+/**
 * @brief ホーミング原点(LOWER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
 *        Shaftのパルス幅を計算する。
 *        ホーミング完了後，ESP32はshaft_rotate/shaft_fineを0にリセットしてから
@@ -123,7 +144,7 @@ static void MX_TIM3_Init(void);
 */
 static uint32_t shaft_home_pulse(){
   direct_t home = LOWER_ARM_HOME_COORDINATE;
-  double shaft_theta = to_polar(home).theta;
+  double shaft_theta = shaft_deg_from_arm_deg(home) * M_PI / 180.0;
   double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
   return (uint32_t)shaft_pulse;
 }
@@ -190,7 +211,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_right));
     if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    double shaft_theta = to_polar(direct).theta;
+    // アームの偏角を，真上向き(90度)がShaft135度になるようオフセットした角度にする
+    // (shaft_deg_from_arm_deg()参照)。
+    double shaft_theta = shaft_deg_from_arm_deg(direct) * M_PI / 180.0;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
     // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，回転方向側の残り90度分の
     // 余裕を超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
