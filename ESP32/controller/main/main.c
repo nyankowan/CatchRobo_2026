@@ -85,6 +85,7 @@ int app_main(void) {
 #define STICK_SCALE 64
 #define LOWER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
 #define UPPER_ARM_SHAFT_FINE_STEP_DEG 1 //L/R押しっぱなし時のシャフト角度微調整量(度/ループ)
+#define UPPER_HAND_FINE_STEP_DEG 4
 void dump_task(void* arg){
     mypad_t mp[MAX_MYPAD] = {0};
     while(1){
@@ -144,7 +145,7 @@ void main_task(void* arg){
         upper_arm_move(
             upper_mypad.RIGHT - upper_mypad.LEFT + upper_mypad.LX/STICK_SCALE,
             upper_mypad.UP -    upper_mypad.DOWN - upper_mypad.LY/STICK_SCALE,
-            upper_mypad.A * 4 - upper_mypad.B * 4,
+            (upper_mypad.A - upper_mypad.B) * UPPER_HAND_FINE_STEP_DEG,
             (upper_mypad.R - upper_mypad.L) * UPPER_ARM_SHAFT_FINE_STEP_DEG,
             PRESSED(upper_mypad.ZL, upper_prev_mypad.ZL) || PRESSED(upper_mypad.ZR, upper_prev_mypad.ZR)
         );
