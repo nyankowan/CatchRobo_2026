@@ -109,7 +109,9 @@ CAN RX0 interrupt -> Enable
 
 出場チーム(青/赤)は`common/arm/inc/arm.h`の`ROBOT_TEAM`をコード書き込み時に書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．`robomas_controller`など`arm.h`を使う全ファームウェアで必ず同じ値にすること．
 
-270度サーボのうち，Shaftが普段使うのは可動範囲分の180度だけである．`shaft_rotate=1`でハンドの向きを180度反転させると，アーム角によっては残り90度分の余裕を超えて可動域の反対側まで回転しきれないことがあるが，チームごとに許容範囲を切り替えたり，そのたびにサーボを取り替えたりはせず，後述の`clamp_servo_pulse()`でパルス幅を`SERVO_0`~`SERVO_270`にクランプすることで「それ以上は回転しない」ことをそのまま許容する．
+270度サーボのうち，Shaftが普段使うのは可動範囲分の180度だけである．`shaft_rotate=1`でハンドの向きを180度反転させると，アーム角によっては回転方向側の残り90度分の余裕を超えて可動域の反対側まで回転しきれないことがあるが，そのたびにサーボを取り替えたりはせず，後述の`clamp_servo_pulse()`でパルス幅を`SERVO_0`~`SERVO_270`にクランプすることで「それ以上は回転しない」ことをそのまま許容する．
+
+整理機構は赤/青チームで左右逆側に取り付けるため，余裕が生まれる回転方向もチームで逆になる．`ROBOT_TEAM`に応じて，青チームは`shaft_theta`に`+M_PI`(高いパルス側の余裕を使う)，赤チームは`-M_PI`(低いパルス側の余裕を使う)を加算する．
 
 ```C
 /* USER CODE BEGIN Includes */
@@ -195,10 +197,17 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     double shaft_theta = to_polar(direct).theta;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
-    // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，残り90度分の余裕を
-    // 超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
+    // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，回転方向側の残り90度分の
+    // 余裕を超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
     // パルス幅がクランプされ，それ以上は回転しない(毎回サーボを取り替える運用はしない)。
+    // 整理機構は赤/青チームで左右逆側に取り付けるため(arm.h参照)，余裕が生まれる側(=回転
+    // させる方向)もチームで逆になる。青は+M_PI(高いパルス側に余裕)，赤は-M_PI(低いパルス側に
+    // 余裕)とする。
+#if ROBOT_TEAM == ROBOT_TEAM_BLUE
     if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
+#else
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta -= M_PI;}
+#endif
     // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
     shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
     double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
