@@ -147,8 +147,8 @@ void main_task(void* arg){
         );
         send_upper_arm();
 
-        if(upper_mypad.X)can_tx((can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 90});
-        if(upper_mypad.Y)can_tx((can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 0});
+        if(upper_mypad.X)can_tx(&(can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 90});
+        if(upper_mypad.Y)can_tx(&(can_command_data_t){.id = CAN_ID_ASSEMBLE_COMMAND, .data.assemble_deg = 0});
 
         micon_connection_update();
         arms_update();
