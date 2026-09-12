@@ -9,7 +9,7 @@
 
 ## 実装状況
 
-`CAN_ID_UPPER_ARM_COMMAND`(`common/can_protocol/README.md`参照)を受信し，x/yから求めた偏角をShaftサーボ，zをZサーボのPWMへ反映する．`CAN_ID_UPPER_HOMING`受信時はShaftのみ`SERVO_0`へ戻す(Zは現在位置を維持する)．
+`CAN_ID_UPPER_ARM_COMMAND`(`common/can_protocol/README.md`参照)を受信し，x/yから求めた偏角をShaftサーボ，zをZサーボのPWMへ反映する．`CAN_ID_UPPER_HOMING`受信時はShaftのみホーミング原点(`UPPER_ARM_HOME_COORDINATE`)の向き(`shaft_home_pulse()`)へ戻す(Zは現在位置を維持する)．`shaft_deg_from_home()`の定義上，原点では常に相対偏角0度になるため，このパルス幅は結果的に`SERVO_0`と一致する．ホーミング開始時点からホーミング完了時と同じ向きにしておくことで，ハンドの向きが変わらないようにしている(下アームの`shaft_home_pulse()`と同じ考え方，[STM32/lower_arm_servo/README.md](../lower_arm_servo/README.md)参照)．
 
 上のアームはハンドの取り付け側が下のアームと逆(180度回転してついている)ため，偏角の可動域は`UPPER_ARM_DEG_MIN`~`MIN+RANGE`(180~360度)になる．Shaftサーボへ反映する際は，`shaft_deg_from_home()`でホーミング原点(`UPPER_ARM_DEG_HOME_DEG`，`common/arm/inc/arm.h`参照)からの相対偏角(0~180度)を計算し，下のアームと同じ0~180度基準として使う．
 
