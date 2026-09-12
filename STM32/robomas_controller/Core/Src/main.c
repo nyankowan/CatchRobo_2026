@@ -154,7 +154,9 @@ uint32_t status_led_phase_start;
 #define ROBOMAS_M2_GEAR_RATIO 36              //M2006
 #define ROBOMAS_ANGLE_RESOLUTION 8192 //0〜8191
 
-#define ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
+//上下でロボマスの取り付け向きが逆なため，R軸と同様にDEG軸も上下で別定数にして符号を反転する
+#define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
+#define UPPER_ARM_DEG_ROBOMAS_DIRECTION -1
 #define LOWER_ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
 #define UPPER_ARM_R_ROBOMAS_DIRECTION -1
 
@@ -587,9 +589,9 @@ double get_r(robomas_t *rb)
 */
 robomas_t *set_robomas_homing_rpm(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM * rb->gear_ratio;
+    rb->rpm_pid.sv = -LOWER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_LOWER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->rpm_pid.sv = -ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
+    rb->rpm_pid.sv = -UPPER_ARM_DEG_ROBOMAS_DIRECTION * HOMING_UPPER_DEG_RPM * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
     rb->rpm_pid.sv = -LOWER_ARM_R_ROBOMAS_DIRECTION * HOMING_LOWER_R_RPM * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
@@ -603,11 +605,11 @@ robomas_t *set_robomas_homing_rpm(robomas_t *rb){
 **/
 robomas_t *set_robomas_deg_from_coordinate(robomas_t *rb){
   if(rb == &robomas_lower_deg){
-    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = LOWER_ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_lower).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_lower_r){
     rb->ang_pid.sv = LOWER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_lower).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_deg){
-    rb->ang_pid.sv = ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
+    rb->ang_pid.sv = UPPER_ARM_DEG_ROBOMAS_DIRECTION * to_polar(coordinate_upper).theta / (2 * M_PI) * POLAR_RATIO * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else if(rb == &robomas_upper_r){
     rb->ang_pid.sv = UPPER_ARM_R_ROBOMAS_DIRECTION * to_polar(coordinate_upper).r /(R_ROBOMAS_DIAMETER * M_PI) * ROBOMAS_ANGLE_RESOLUTION * rb->gear_ratio;
   }else{return NULL;}
