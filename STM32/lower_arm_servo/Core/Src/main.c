@@ -113,6 +113,22 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 /**
+* @brief ホーミング原点(LOWER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
+*        Shaftのパルス幅を計算する。
+*        ホーミング完了後，ESP32はshaft_rotate/shaft_fineを0にリセットしてから
+*        x/yをLOWER_ARM_HOME_COORDINATEにしたCAN_ID_LOWER_ARM_COMMANDを送ってくるため，
+*        その時に計算されるパルス幅と同じ値になる(CAN_ID_LOWER_ARM_COMMAND側の計算式参照)。
+*        hand_fold()でホーミング開始時点からこの角度にしておくことで，ホーミング完了時に
+*        ハンドの向きが変わらないようにする。
+*/
+static uint32_t shaft_home_pulse(){
+  direct_t home = LOWER_ARM_HOME_COORDINATE;
+  double shaft_theta = to_polar(home).theta;
+  double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+  return (uint32_t)shaft_pulse;
+}
+
+/**
 * @brief ハンドをたたむ
  */
 static void hand_fold(){
@@ -120,7 +136,8 @@ static void hand_fold(){
     __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);
     __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    // Shaft(ハンドの向き)は，たたんだ状態にはせずホーミング原点の向きのままにしておく
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_home_pulse());
 }
 
 /**
