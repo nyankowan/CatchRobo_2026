@@ -123,6 +123,17 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 /**
+* @brief ハンドをたたむ
+ */
+static void hand_fold(){
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+}
+
+/**
 * @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
 */
 static uint32_t hand_state_to_pulse(hand_state_t *state){
@@ -159,7 +170,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_left));
     __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_middle));
     __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_right));
-    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     double shaft_theta = to_polar(direct).theta;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
@@ -179,11 +190,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     lower_arm_right = HAND_STATE_RELEASE;
     lower_arm_expand = false;
 
-    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);
-    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);
-    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    hand_fold();
     break;
 
 
@@ -323,6 +330,7 @@ int main(void)
 
   HAL_TIM_PWM_Start(&htim1, Shaft_TIM_CHANNEL);
 
+  hand_fold();
   HAL_CAN_Start(&hcan);
   if (HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
     Error_Handler();
