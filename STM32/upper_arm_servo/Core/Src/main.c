@@ -115,6 +115,21 @@ static double shaft_deg_from_home(direct_t direct){
   return fabs(deg - UPPER_ARM_DEG_HOME_DEG);
 }
 
+/**
+* @brief ホーミング原点(UPPER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
+*        Shaftのパルス幅を計算する。
+*        UPPER_ARM_HOME_COORDINATEをshaft_deg_from_home()に通すと，定義上必ず原点からの
+*        相対偏角0度になる(=CAN_ID_UPPER_ARM_COMMAND側の計算式でSERVO_0になる)ため，
+*        本来SERVO_0を直接使っても結果は同じだが，下アーム(shaft_home_pulse())と実装を
+*        揃えて，ホーミング開始時点からホーミング原点と同じ向きであることを明示している。
+*/
+static uint32_t shaft_home_pulse(){
+  direct_t home = UPPER_ARM_HOME_COORDINATE;
+  double shaft_theta = shaft_deg_from_home(home) * M_PI / 180.0;
+  double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+  return (uint32_t)shaft_pulse;
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   can_data_t rx_data;
   CAN_RxHeaderTypeDef rx_header;
@@ -139,8 +154,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
   }
 
   case CAN_ID_UPPER_HOMING:
-    // Zは現在位置を維持し，Shaftのみ原点へ戻す
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    // Zは現在位置を維持し，Shaftのみホーミング開始時点からホーミング原点の向きにしておく
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_home_pulse());
     break;
 
   default:

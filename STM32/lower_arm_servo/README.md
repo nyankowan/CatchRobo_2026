@@ -306,7 +306,7 @@ Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)�
 
 実装は`status_led_state_t`によるステートマシン(`STATUS_LED_STATE_MARKER` → `..._CHANNEL_GAP` → `..._BLINK_ON`/`..._BLINK_GAP`(chごとに1〜2回) → `..._END_PAUSE` → 最初に戻る)．ONかOFFかで点滅回数が変わるため，固定長のフェーズ表ではなくこの状態機械で管理している．
 
-`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．Shaftサーボも同時にSERVO_0へ戻す(Status_LEDの点滅表示には含まれない)．
+`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．Shaftサーボは，たたんだ状態にはせずホーミング原点(`LOWER_ARM_HOME_COORDINATE`)に対応する向きに戻す(ホーミング開始時点からホーミング完了時と同じ向きにしておくことで，完了時にハンドの向きが変わらないようにするため)．Shaftの状態はStatus_LEDの点滅表示には含まれない．
 
 ```C
 /* USER CODE BEGIN 2 */
