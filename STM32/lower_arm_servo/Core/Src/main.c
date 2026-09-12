@@ -141,7 +141,7 @@ static void hand_fold(){
 */
 static uint32_t hand_state_to_pulse(hand_state_t *state){
   if(state == NULL)return 0;
-  if(state == lower_arm_left){
+  if(state == &lower_arm_left){
     switch(*state){
       case HAND_STATE_HOLD:  return SERVO_45;
       case HAND_STATE_CATCH: return SERVO_150;
