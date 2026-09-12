@@ -105,19 +105,11 @@ CAN RX0 interrupt -> Enable
 
 // ROBOT_TEAM(出場チーム 青/赤)はcommon/arm/inc/arm.hで定義される(ESP32/STM32の
 // 全ファームウェアで共有する値なので，このファイルでは再定義しない)。
-
-#if ROBOT_TEAM == ROBOT_TEAM_BLUE
-#define SHAFT_ROTATE_ALLOWED_DEG_MIN 0.0
-#define SHAFT_ROTATE_ALLOWED_DEG_MAX 90.0
-#else
-#define SHAFT_ROTATE_ALLOWED_DEG_MIN 90.0
-#define SHAFT_ROTATE_ALLOWED_DEG_MAX 180.0
-#endif
 ```
 
 出場チーム(青/赤)は`common/arm/inc/arm.h`の`ROBOT_TEAM`をコード書き込み時に書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．`robomas_controller`など`arm.h`を使う全ファームウェアで必ず同じ値にすること．
 
-青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけシャフトを180度回転させる余裕があり(90~180度側でサーボの可動域上限に達する)，赤チームは左側に整理機構が来るため，逆にアーム角90~180度の範囲でだけ余裕がある．`SHAFT_ROTATE_ALLOWED_DEG_MIN`~`SHAFT_ROTATE_ALLOWED_DEG_MAX`はこの許容範囲を表し，範囲外では`shaft_rotate=1`を受信していても180度回転を適用しない(後述)．
+270度サーボのうち，Shaftが普段使うのは可動範囲分の180度だけである．`shaft_rotate=1`でハンドの向きを180度反転させると，アーム角によっては残り90度分の余裕を超えて可動域の反対側まで回転しきれないことがあるが，チームごとに許容範囲を切り替えたり，そのたびにサーボを取り替えたりはせず，後述の`clamp_servo_pulse()`でパルス幅を`SERVO_0`~`SERVO_270`にクランプすることで「それ以上は回転しない」ことをそのまま許容する．
 
 ```C
 /* USER CODE BEGIN Includes */
@@ -156,10 +148,21 @@ CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 ```
 
-`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．Shaftは，`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加える．
+`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．Shaftは，`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加えた上で，`clamp_servo_pulse()`によりパルス幅を`SERVO_0`~`SERVO_270`にクランプする．
 
 ```C
 /* USER CODE BEGIN 0 */
+
+/**
+* @brief 計算したパルス幅を可動域(SERVO_0~SERVO_270)にクランプする．
+*        Shaftはshaft_rotate/shaft_fineの加算で可動域を超えることがあるため，
+*        クランプした分だけ回転(または微調整)が適用されないことを許容する。
+*/
+static uint32_t clamp_servo_pulse(double pulse){
+  if(pulse < SERVO_0)return SERVO_0;
+  if(pulse > SERVO_270)return SERVO_270;
+  return (uint32_t)pulse;
+}
 
 /**
 * @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
@@ -192,14 +195,14 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     double shaft_theta = to_polar(direct).theta;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
-    // ただしSHAFT_ROTATE_ALLOWED_DEG_MIN~MAX(チームごとに決まる，サーボの可動域内に
-    // 収まるアーム偏角の範囲)の外では回転させない(可動域を超えてしまうため)。
-    double arm_deg = shaft_theta * 180.0 / M_PI;
-    bool shaft_rotate_allowed = (SHAFT_ROTATE_ALLOWED_DEG_MIN <= arm_deg) && (arm_deg <= SHAFT_ROTATE_ALLOWED_DEG_MAX);
-    if(rx_data.lower_arm.shaft_rotate && shaft_rotate_allowed){shaft_theta += M_PI;}
+    // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，残り90度分の余裕を
+    // 超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
+    // パルス幅がクランプされ，それ以上は回転しない(毎回サーボを取り替える運用はしない)。
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
     // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
     shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
+    double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,clamp_servo_pulse(shaft_pulse));
     break;
 
   case CAN_ID_LOWER_HOMING:

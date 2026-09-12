@@ -52,18 +52,6 @@
 //  各基板は再起動するため，実行時にトグルする方式では状態を保持できない。そのため，
 //  チームに応じてarm.h側の値を書き換えてビルド・書き込みすることで固定する。)
 
-// shaft_rotate(180度回転)を許可するアーム偏角の範囲(度)。
-// 青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけ180度回転させる
-// 余裕があり(90~180度側でサーボの可動域上限に達する)，赤チームは左側に整理機構が
-// 来るため，逆にアーム角90~180度の範囲でだけ余裕がある。
-#if ROBOT_TEAM == ROBOT_TEAM_BLUE
-#define SHAFT_ROTATE_ALLOWED_DEG_MIN 0.0
-#define SHAFT_ROTATE_ALLOWED_DEG_MAX 90.0
-#else
-#define SHAFT_ROTATE_ALLOWED_DEG_MIN 90.0
-#define SHAFT_ROTATE_ALLOWED_DEG_MAX 180.0
-#endif
-
 // Status_LEDでLeft->Middle->Right->Expandの順に各chの状態を点滅回数で表示する
 // 長いマーカー点灯(周期の開始) -> 各chごとに短い点滅(ON:2回 OFF:1回) -> 一定時間消灯 の繰り返し
 #define STATUS_LED_MARKER_MS     1000 //周期の始まりを示す長い点灯
@@ -136,6 +124,17 @@ static void hand_fold(){
 }
 
 /**
+* @brief 計算したパルス幅を可動域(SERVO_0~SERVO_270)にクランプする．
+*        Shaftはshaft_rotate/shaft_fineの加算で可動域を超えることがあるため，
+*        クランプした分だけ回転(または微調整)が適用されないことを許容する。
+*/
+static uint32_t clamp_servo_pulse(double pulse){
+  if(pulse < SERVO_0)return SERVO_0;
+  if(pulse > SERVO_270)return SERVO_270;
+  return (uint32_t)pulse;
+}
+
+/**
 * @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
 */
 static uint32_t hand_state_to_pulse(hand_state_t *state){
@@ -176,14 +175,14 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
     double shaft_theta = to_polar(direct).theta;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
-    // ただしSHAFT_ROTATE_ALLOWED_DEG_MIN~MAX(チームごとに決まる，サーボの可動域内に
-    // 収まるアーム偏角の範囲)の外では回転させない(可動域を超えてしまうため)。
-    double arm_deg = shaft_theta * 180.0 / M_PI;
-    bool shaft_rotate_allowed = (SHAFT_ROTATE_ALLOWED_DEG_MIN <= arm_deg) && (arm_deg <= SHAFT_ROTATE_ALLOWED_DEG_MAX);
-    if(rx_data.lower_arm.shaft_rotate && shaft_rotate_allowed){shaft_theta += M_PI;}
+    // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，残り90度分の余裕を
+    // 超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
+    // パルス幅がクランプされ，それ以上は回転しない(毎回サーボを取り替える運用はしない)。
+    if(rx_data.lower_arm.shaft_rotate){shaft_theta += M_PI;}
     // シャフト角度の微調整(度)。L/Rの押しっぱなしでESP32側が加減算した値をそのまま加える
     shaft_theta += rx_data.lower_arm.shaft_fine * M_PI / 180.0;
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0);
+    double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,clamp_servo_pulse(shaft_pulse));
     break;
 
   case CAN_ID_LOWER_HOMING:
