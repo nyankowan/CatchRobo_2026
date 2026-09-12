@@ -28,7 +28,7 @@
 //  ファームウェア間で食い違い，可動域の反対側の固定端に衝突する恐れがある。)
 #define ROBOT_TEAM_BLUE 0
 #define ROBOT_TEAM_RED  1
-#define ROBOT_TEAM ROBOT_TEAM_RED  //出場チームに応じて書き換えてビルドする
+#define ROBOT_TEAM ROBOT_TEAM_BLUE  //出場チームに応じて書き換えてビルドする
 
 // 赤/青チームは，フィールドが鏡合わせのため整理機構を左右逆側に取り付け直す必要があり，
 // それに合わせて上下アームとも「DEG軸(偏角)のどちら側の可動端をホーミング原点にするか」を
