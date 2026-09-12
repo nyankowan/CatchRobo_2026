@@ -160,7 +160,7 @@ uint32_t status_led_phase_start;
 //上下でロボマスの取り付け向きが逆なため，R軸と同様にDEG軸も上下で別定数にして符号を反転する
 //(この符号は配線・機構で決まる固定値で，チームによっては変わらない)
 #define LOWER_ARM_DEG_ROBOMAS_DIRECTION 1 //上から見て半時計回りが正でモーターは右ねじを正とするとき
-#define UPPER_ARM_DEG_ROBOMAS_DIRECTION 1
+#define UPPER_ARM_DEG_ROBOMAS_DIRECTION -1
 #define LOWER_ARM_R_ROBOMAS_DIRECTION 1 //アームが伸びる方向が正でモーター右ねじ正
 #define UPPER_ARM_R_ROBOMAS_DIRECTION -1
 
