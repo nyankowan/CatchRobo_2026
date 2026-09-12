@@ -51,7 +51,7 @@
 // 書き換えてビルド・書き込みすることで固定する。
 #define ROBOT_TEAM_BLUE 0
 #define ROBOT_TEAM_RED  1
-#define ROBOT_TEAM ROBOT_TEAM_BLUE  //出場チームに応じて書き換えてビルドする
+#define ROBOT_TEAM ROBOT_TEAM_RED  //出場チームに応じて書き換えてビルドする
 
 // shaft_rotate(180度回転)を許可するアーム偏角の範囲(度)。
 // 青チームは右側に整理機構が来るため，アーム角0~90度の範囲でだけ180度回転させる

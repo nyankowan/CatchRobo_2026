@@ -16,7 +16,7 @@
 
 #define R_ROBOMAS_DIAMETER 30.0 //アーム長ロボマスにつくギアの直径(mm)
 
-#define POLAR_RATIO (8.0/3.0) //アーム軸/モーター軸　直径比
+#define POLAR_RATIO (4.0/1.0) //アーム軸/モーター軸　直径比
 
 #define LOWER_ARM_HOME_COORDINATE {\
   .x = LOWER_ARM_R_MIN,\
