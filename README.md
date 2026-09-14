@@ -63,7 +63,6 @@ CatchRobo_2026/
 
 ### Actuator
 - Robomaster M3508
-- Robomaster M2006
 - DS3225 Servo
 
 ### Sensor
@@ -88,7 +87,7 @@ graph LR
     CAN --- STM3[STM32 #3<br>upper_arm_servo]
     CAN --- STM4[STM32 #4<br>assemble_servo]
 
-    STM1 <-->|CAN| Motor[Robomaster Motor<br>M3508/M2006]
+    STM1 <-->|CAN| Motor[Robomaster Motor<br>M3508]
     Limit[リミットスイッチ] -->|GPIO| STM1
     STM2 -->|PWM| Servo1[DS3225<br>Left/Middle/Right/Expand/Shaft]
     STM3 -->|PWM| Servo2[DS3225<br>Shaft/Z]
