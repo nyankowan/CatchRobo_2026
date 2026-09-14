@@ -7,6 +7,7 @@ ESP32およびSTM32間で使用するCAN通信プロトコルの仕様を定義�
 | 項目             | 仕様                   |
 | -------------- | -------------------- |
 | CAN            | Classical CAN        |
+| Bitrate        | 1 Mbps               |
 | CAN ID         | Standard ID (11 bit) |
 | 最大DLC          | 8 byte               |
 | Byte order     | Little-endian        |
@@ -43,8 +44,8 @@ CANの調停仕様により，CAN IDが小さいメッセージほど高い優�
 | `0x021` | `LOWER_HOMING`                 |   1 | Lower Arm Homing開始要求     |
 | `0x025` | `LOWER_HOMING_DONE_ACK`        |   1 | Lower Arm Homing完了通知の確認  |
 | `0x026` | `LOWER_HOMING_DONE`            |   1 | Lower Arm Homing完了通知     |
-| `0x100` | `UPPER_ARM_COMMAND`            |   7 | Upper Armへの操作指令          |
-| `0x101` | `LOWER_ARM_COMMAND`            |   5 | Lower Armへの操作指令          |
+| `0x100` | `UPPER_ARM_COMMAND`            |   8 | Upper Armへの操作指令          |
+| `0x101` | `LOWER_ARM_COMMAND`            |   6 | Lower Armへの操作指令          |
 | `0x102` | `ASSEMBLE_COMMAND`             |   1 | Assemble機構への操作指令         |
 | `0x3F0` | `ERROR_CODE`                   |   1 | エラー通知                    |
 
@@ -93,9 +94,10 @@ Upper ArmおよびLower ArmのHomingでは，
 * Homing完了ACK
 
 の4種類のメッセージを使用する．
-ホーミング処理の中枢を担うのはrobomas_contorollerのみで，
-サーボ制御基板はHOMINGを受け取ったときのみ，サーボを初期化するだけである．
-そして，HOMIG_ACK,HOMING_DONEを返さない．
+ホーミング処理の中枢を担うのは`robomas_controller`のみで，
+サーボ制御基板(`lower_arm_servo` / `upper_arm_servo`)はHOMINGを受け取ったときにサーボを初期位置へ戻すだけであり，
+`HOMING_ACK` / `HOMING_DONE` は返さない．
+`assemble_servo`はHomingに関与しない．
 
 基本的な通信シーケンスは以下とする．
 
@@ -196,7 +198,9 @@ Byte 7 : shaft_rotate (bit 0のみ使用)
 
 `shaft_rotate=1`は常に90度回転が適用されるとは限らない．下のアームの`shaft_rotate`(180度回転)と同様，出場チーム(青/赤)ごとに定まる，サーボの可動域内に収まるアーム偏角の範囲でのみ受信側(STM32/upper_arm_servo)が回転を適用する．
 
-`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-15`～`15`とする．
+`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-45`～`45`とし，送信側(`ESP32/controller/main/robot/arm_command.c`の`UPPER_ARM_SHAFT_FINE_MAX_DEG` / `LOWER_ARM_SHAFT_FINE_MAX_DEG`)でこの範囲にクランプする．
+
+受信側の実装(座標からShaftサーボ角度への変換，クランプ)の詳細は[STM32/upper_arm_servo/README.md](../../STM32/upper_arm_servo/README.md)を参照．
 
 C言語上では `upper_arm_t` として表現する．
 
@@ -247,15 +251,17 @@ typedef struct {
 
 `shaft_rotate=1`は常に180度回転が適用されるとは限らない．出場チーム(青/赤)ごとに定まる，サーボの可動域内に収まるアーム偏角の範囲でのみ受信側(STM32/lower_arm_servo)が回転を適用する．詳細は[STM32/lower_arm_servo/README.md](../../STM32/lower_arm_servo/README.md)を参照．
 
-`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-15`～`15`とする．
+`shaft_fine`はシャフト角度の微調整オフセット(度)で，`shaft_rotate`とは独立に加算される．有効範囲は`-45`～`45`とし，送信側(`ESP32/controller/main/robot/arm_command.c`の`UPPER_ARM_SHAFT_FINE_MAX_DEG` / `LOWER_ARM_SHAFT_FINE_MAX_DEG`)でこの範囲にクランプする．
 
 `hand_state_t`は以下の3状態を取る．
 
-| Value | Name                | サーボ角度 | Description        |
-| ----: | ------------------- | -----: | ------------------- |
-|     0 | `HAND_STATE_RELEASE` |    0度 | ワークをリリースする状態 |
-|     1 | `HAND_STATE_HOLD`    |   45度 | ワークを保持する状態     |
-|     2 | `HAND_STATE_CATCH`   |  180度 | ワークをキャッチする状態  |
+| Value | Name                 | Description          |
+| ----: | -------------------- | -------------------- |
+|     0 | `HAND_STATE_RELEASE` | ワークをリリースする状態 |
+|     1 | `HAND_STATE_HOLD`    | ワークを保持する状態     |
+|     2 | `HAND_STATE_CATCH`   | ワークをキャッチする状態  |
+
+各状態に対応する実際のサーボ角度(パルス幅)はハンドの取り付け向きによって変わるため，プロトコルでは規定せず受信側(`lower_arm_servo`)が決める．具体的な値は[STM32/lower_arm_servo/README.md](../../STM32/lower_arm_servo/README.md)を参照．
 
 例えば(MSBからLSBの順)，
 
@@ -323,7 +329,11 @@ Byte 0をAssemble機構への角度指令として使用する．
 | ---: | ---------------------------- | ----- | ----------- |
 |    0 | `assemble_deg_t` (`uint8_t`) | `deg` | 角度指令 0～90°  |
 
-有効範囲は `0` ～ `90` とする．
+有効範囲は `0` ～ `90` とする．この上限は `can_protocol.h` の `ASSEMBLE_DEG_RANGE`(=90) として定義し，受信側でこの値にクランプする．
+
+受信側の実装の詳細は[STM32/assemble_servo/README.md](../../STM32/assemble_servo/README.md)を参照．
+
+Assembleには対応するHeartbeat CAN IDが無いため，Main Controllerによる生存監視(3章)の対象外である．
 
 ---
 
@@ -408,13 +418,13 @@ typedef union {
 
 ただし，C構造体にはpaddingが挿入される可能性がある．
 
-例えば `lower_arm_t` のCAN上のデータサイズは5 byteだが，
+例えば `lower_arm_t` のCAN上のデータサイズは6 byteだが，
 
 ```c
 sizeof(lower_arm_t)
 ```
 
-が5 byteになることは保証されない．
+が6 byteになることは保証されない．
 
 したがって，CAN送信時のDLCを `sizeof()` から決定してはならない．
 
@@ -426,14 +436,20 @@ can_protocol_get_dlc(id)
 
 によってCAN IDに対応するDLCを取得する．
 
-`can_data_t` 自体は，
+各構造体が8 byteに収まること，および `can_data_t` 自体が8 byteであることは，
 
 ```c
+_Static_assert(sizeof(lower_arm_t) <= CAN_DLC_MAX,
+               "lower_arm_t is too large");
+
+_Static_assert(sizeof(upper_arm_t) <= CAN_DLC_MAX,
+               "upper_arm_t is too large");
+
 _Static_assert(sizeof(can_data_t) == CAN_DLC_MAX,
                "can_data_t must be exactly 8 bytes");
 ```
 
-によって8 byteであることをコンパイル時に確認する．
+によってコンパイル時に確認する．
 
 ---
 

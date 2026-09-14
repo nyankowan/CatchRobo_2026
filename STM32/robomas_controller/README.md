@@ -1,5 +1,10 @@
 # STM32/robomas_controller
 
+両アームのアーム長(r軸)とアーム偏角(deg軸)をRobomaster(M3508/M2006)により制御する．ホーミング処理の中枢を担う．
+
+## settings
+### Pin
+
 | 用途 | STM32ピン | CubeMX設定 |
 | :--- | :--- | :--- |
 | CAN1 (Main Controllerとの通信) | PA11/PA12 | COMMAND_CAN_RX/TX |
@@ -14,8 +19,17 @@
 
 DEG軸は`ROBOT_TEAM`(下記「DEG軸のホーミング方向とROBOT_TEAM」参照)に応じて`_UNDER_LIMIT`/`_OVER_LIMIT`のどちらか一方をホーミングに使う．R軸は`_R_LIMIT`のみ(チームに依らず固定)．
 
-# 概要
-両アームのアーム長とアーム偏角をロボマスターにより制御する．
+### CAN
+
+他プロジェクト(NUCLEO-F303K8)と違いNUCLEO-F446REのためCubeMXの設定値が異なるが，ビットレートは同じ1Mbps．
+
+| | CAN1 (Main Controller) | CAN2 (Robomaster) |
+| :--- | :--- | :--- |
+| Prescaler | 2 | 2 |
+| Time Quanta in Bit Segment 1 | 12 | 12 |
+| Time Quanta in Bit Segment 2 | 2 | 2 |
+
+## 概要
 
 すべてのロボマスターからフィードバックを正常に受け取ることができてから，    
 Main Controllerからホーミング指令を受け取り，ホーミング処理が完了して初めて，Main Controllerから制御可能になる．    
@@ -24,6 +38,10 @@ Main Controllerからホーミング指令を受け取り，ホーミング処�
 
 CAN上のメッセージフォーマットやCAN IDの詳細は [common/can_protocol/README.md](../../common/can_protocol/README.md) を参照．
 このREADMEでは，robomas_controller自身がその仕様をどう実装しているか(状態遷移・タイムアウト・再送)を説明する．
+
+サーボ制御基板(`lower_arm_servo` / `upper_arm_servo`)は`HOMING`を受け取ったときにサーボを初期位置へ戻すだけで，`HOMING_ACK` / `HOMING_DONE` は返さない．
+
+mainループ内では`HEARTBEAT_MS`(300ms)周期で`CAN_ID_ROBOMAS_CONTROLLER_HEARTBEAT`を送信し，Main Controllerとの通信生存を通知する(他のSTM32と共通の仕組み)．
 
 ## ROBOMASTER_STATE
 ```C

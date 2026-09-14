@@ -1,4 +1,3 @@
-
 # STM32
 
 キャチロボ2026で使用する4台のSTM32(Nucleo)のプログラムをまとめたディレクトリ．
@@ -18,13 +17,33 @@ STM32/
 │   └── 下アームのハンド(Left/Middle/Right/Expand)とShaftサーボの制御
 │
 ├── upper_arm_servo/
-│   └── 上アームのShaft/Zサーボの制御(未実装，CubeMX生成のスケルトンのみ)
+│   └── 上アームのShaft/Zサーボの制御
 │
 └── assemble_servo/
     └── 整理機構(Assemble)のサーボ角度制御
 ```
 
 各プロジェクトの詳細は，それぞれのディレクトリ内のREADME.mdを参照．
+
+| プロジェクト | Nucleo | 基板 | README |
+| :--- | :--- | :--- | :--- |
+| `robomas_controller` | NUCLEO-F446RE | `Kicad/STM32F446RE_robomas_controller` | [robomas_controller/README.md](robomas_controller/README.md) |
+| `lower_arm_servo` | NUCLEO-F303K8 | `Kicad/STM32F303K8_lower_arm_servo` | [lower_arm_servo/README.md](lower_arm_servo/README.md) |
+| `upper_arm_servo` | NUCLEO-F303K8 | `Kicad/STM32F303K8_lower_arm_servo`(流用) | [upper_arm_servo/README.md](upper_arm_servo/README.md) |
+| `assemble_servo` | NUCLEO-F303K8 | `Kicad/STM32F303K8_lower_arm_servo`(流用) | [assemble_servo/README.md](assemble_servo/README.md) |
+
+CAN ID・データフォーマットの仕様は [common/can_protocol/README.md](../common/can_protocol/README.md) を参照．
+
+## ビルド
+
+各プロジェクトのディレクトリで以下を実行する．
+
+```bash
+cmake --preset Release
+cmake --build --preset Release
+```
+
+4プロジェクト共通のDev Container(`STM32/.devcontainer`)を用意しており，どのプロジェクトも同じコンテナ内でビルドできる(詳細は[リポジトリ直下のREADME.md](../README.md)を参照)．
 
 ## 共通ライブラリのリンク方法
 
@@ -63,7 +82,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
 `assemble_servo` は座標変換を使わず角度指令をそのままPWMに変換するだけなので，`coordinate` はリンクしていない(`stm_can` と `can_protocol` のみ)．
 
-`robomas_controller` のみ，ホーミングのタイムアウト・速度・可動域の定数を使うため，上記に加えて `common/arm` も追加でリンクしている．
+`robomas_controller` / `lower_arm_servo` / `upper_arm_servo` は，ホーミング原点・可動域・出場チーム(`ROBOT_TEAM`)の定数を使うため，上記に加えて `common/arm` も追加でリンクしている(`assemble_servo` は使わないためリンクしていない)．
 
 ```CMake
 # ESP32 / STM32共通 アームパラメータ

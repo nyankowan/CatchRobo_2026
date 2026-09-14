@@ -1,4 +1,7 @@
 # STM32/lower_arm_servo
+
+下アームのハンド(Left/Middle/Right/Expand)とShaftサーボを`CAN_ID_LOWER_ARM_COMMAND`/`CAN_ID_LOWER_HOMING`(`common/can_protocol/README.md`参照)経由で制御する．
+
 ```text
                  CAN
 ESP32 ──────── PA11/PA12
@@ -100,16 +103,45 @@ CAN RX0 interrupt -> Enable
 /* USER CODE BEGIN PD */
 #define SERVO_0   500
 #define SERVO_270 2500
-#define SERVO_45  833  //45度 : ワークを保持する状態(HAND_STATE_HOLD)
-#define SERVO_180 1833 //180度: ワークをキャッチする状態(HAND_STATE_CATCH)
+// Left/Middle/Rightハンドの中間角度(HAND_STATE_HOLD/HAND_STATE_CATCH)のパルス幅
+// SERVO_0(0度)~SERVO_270(270度)を基準に角度から線形補間する
+#define SERVO_45  833
+#define SERVO_225 2167
+
+#define SERVO_150 1622
+#define SERVO_120 1388
 
 // ROBOT_TEAM(出場チーム 青/赤)はcommon/arm/inc/arm.hで定義される(ESP32/STM32の
 // 全ファームウェアで共有する値なので，このファイルでは再定義しない)。
 ```
 
+Left(PB4)とMiddle/Right(PB5/PB0)はサーボの取り付け向きが逆なので，同じ`hand_state_t`でも対応するパルス幅が異なる．`hand_state_to_pulse()`がどのハンドの状態かを見て以下のように振り分ける．
+
+| `hand_state_t` | Left | Middle / Right |
+| :--- | :--- | :--- |
+| `HAND_STATE_RELEASE` | `SERVO_0` | `SERVO_270` |
+| `HAND_STATE_HOLD` | `SERVO_45` | `SERVO_225` |
+| `HAND_STATE_CATCH` | `SERVO_150` | `SERVO_120` |
+
+Expandも同様に反転しており，`expand=1`で`SERVO_0`，`expand=0`で`SERVO_270`を出力する．
+
 出場チーム(青/赤)は`common/arm/inc/arm.h`の`ROBOT_TEAM`をコード書き込み時に書き換えて固定する．緊急停止スイッチでESP32/STM32(robomas_controller)が再起動しても状態を保持する必要があるため，実行時にトグルする方式ではなく，ビルド時の定数として持たせている．`robomas_controller`など`arm.h`を使う全ファームウェアで必ず同じ値にすること．
 
-270度サーボのうち，Shaftが普段使うのは可動範囲分の180度だけである．`shaft_rotate=1`でハンドの向きを180度反転させると，アーム角によっては回転方向側の残り90度分の余裕を超えて可動域の反対側まで回転しきれないことがあるが，そのたびにサーボを取り替えたりはせず，後述の`clamp_servo_pulse()`でパルス幅を`SERVO_0`~`SERVO_270`にクランプすることで「それ以上は回転しない」ことをそのまま許容する．
+### Shaftの角度計算
+
+270度サーボのうち，Shaftが普段使うのは中央の180度(45~225度)だけである．`shaft_deg_from_arm_deg()`が，アームの可動域(`LOWER_ARM_DEG_MIN`~`LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE` = 0~180度)の中央(=アームが真上向きの偏角90度)がShaft使用域の中央(135度)に一致するよう，偏角にオフセットを足すだけの単純な線形対応で目標角度を求める．
+
+```C
+static double shaft_deg_from_arm_deg(direct_t direct){
+  double deg = to_polar(direct).theta / (2 * M_PI) * 360.0;
+  // アーム可動域の中央(真上向き)をShaft使用域の中央(135度)に合わせるオフセット
+  return deg - (LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE / 2.0) + 135.0;
+}
+```
+
+`LOWER_ARM_DEG_MIN`は0度で，かつ`to_polar()`の値域[0,2π)の境界と重ならないため，上アーム([STM32/upper_arm_servo/README.md](../upper_arm_servo/README.md)参照)と違い0度付近のラップ補正は不要．この対応では，赤チームのホーミング原点(`LOWER_ARM_DEG_MIN`=0度)が`SERVO_45`，青チームのホーミング原点(`LOWER_ARM_DEG_MIN + LOWER_ARM_DEG_RANGE`=180度)が`SERVO_225`になる．
+
+`shaft_rotate=1`でハンドの向きを180度反転させると，アーム角によっては回転方向側の残り90度分の余裕を超えて可動域の反対側まで回転しきれないことがあるが，そのたびにサーボを取り替えたりはせず，後述の`clamp_servo_pulse()`でパルス幅を`SERVO_0`~`SERVO_270`にクランプすることで「それ以上は回転しない」ことをそのまま許容する．
 
 整理機構は赤/青チームで左右逆側に取り付けるため，余裕が生まれる回転方向もチームで逆になる．`ROBOT_TEAM`に応じて，青チームは`shaft_theta`に`+M_PI`(高いパルス側の余裕を使う)，赤チームは`-M_PI`(低いパルス側の余裕を使う)を加算する．
 
@@ -150,7 +182,9 @@ CAN_RxHeaderTypeDef rx_header;
 can_data_t rx_data = {0};
 ```
 
-`CAN_ID_LOWER_ARM_COMMAND`(Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(HAND_STATE_RELEASE=0度/HAND_STATE_HOLD=45度/HAND_STATE_CATCH=180度)の3状態を取り，`hand_state_to_pulse()`で対応するパルス幅に変換する．Shaftは，`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加えた上で，`clamp_servo_pulse()`によりパルス幅を`SERVO_0`~`SERVO_270`にクランプする．
+`CAN_ID_LOWER_ARM_COMMAND`(x/y/Left/Middle/Right/Expand/shaft_rotate/shaft_fine)と`CAN_ID_LOWER_HOMING`を受信し，ハンドとShaftサーボのPWMを更新する．Left/Middle/Rightは`hand_state_t`(`HAND_STATE_RELEASE`/`HAND_STATE_HOLD`/`HAND_STATE_CATCH`)の3状態を取り，`hand_state_to_pulse()`で上表のパルス幅に変換する．Shaftは，`shaft_deg_from_arm_deg()`で求めた角度に対して`shaft_rotate=1`でハンドの向きを180度反転し，さらに`shaft_fine`(度)を微調整オフセットとして加えた上で，`clamp_servo_pulse()`によりパルス幅を`SERVO_0`~`SERVO_270`にクランプする．
+
+`CAN_ID_LOWER_HOMING`受信時は`hand_fold()`でハンドをたたみ，Shaftはホーミング原点(`LOWER_ARM_HOME_COORDINATE`)に対応する向き(`shaft_home_pulse()`)にしておく．
 
 ```C
 /* USER CODE BEGIN 0 */
@@ -169,13 +203,45 @@ static uint32_t clamp_servo_pulse(double pulse){
 /**
 * @brief hand_state_t(RELEASE/HOLD/CATCH)を対応するサーボのパルス幅に変換する．
 */
-static uint32_t hand_state_to_pulse(hand_state_t state){
-  switch(state){
-    case HAND_STATE_HOLD:  return SERVO_45;
-    case HAND_STATE_CATCH: return SERVO_180;
-    case HAND_STATE_RELEASE:
-    default:                return SERVO_0;
+static uint32_t hand_state_to_pulse(hand_state_t *state){
+  if(state == NULL)return 0;
+  if(state == &lower_arm_left){
+    switch(*state){
+      case HAND_STATE_HOLD:  return SERVO_45;
+      case HAND_STATE_CATCH: return SERVO_150;
+      case HAND_STATE_RELEASE:
+      default:                return SERVO_0;
+    }
+  }else{
+    switch(*state){
+      case HAND_STATE_HOLD:  return SERVO_225;
+      case HAND_STATE_CATCH: return SERVO_120;
+      case HAND_STATE_RELEASE:
+      default:                return SERVO_270;
+    }
   }
+}
+
+/**
+* @brief ホーミング原点(LOWER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
+*        Shaftのパルス幅を計算する．
+*/
+static uint32_t shaft_home_pulse(){
+  direct_t home = LOWER_ARM_HOME_COORDINATE;
+  double shaft_theta = shaft_deg_from_arm_deg(home) * M_PI / 180.0;
+  double shaft_pulse = shaft_theta * (SERVO_270 - SERVO_0) / (3 * M_PI_2) + SERVO_0;
+  return (uint32_t)shaft_pulse;
+}
+
+/**
+* @brief ハンドをたたむ(Shaftはホーミング原点の向きのままにする)
+*/
+static void hand_fold(){
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);
+    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,shaft_home_pulse());
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
@@ -189,13 +255,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     lower_arm_right  = (hand_state_t)rx_data.lower_arm.right;
     lower_arm_expand = rx_data.lower_arm.expand;
 
-    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(lower_arm_left));
-    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(lower_arm_middle));
-    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(lower_arm_right));
-    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}
+    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_left));
+    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_middle));
+    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,hand_state_to_pulse(&lower_arm_right));
+    if(rx_data.lower_arm.expand){__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);}else{__HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_270);}
 
     direct_t direct = {.x = rx_data.lower_arm.x, .y = rx_data.lower_arm.y};
-    double shaft_theta = to_polar(direct).theta;
+    // アームの偏角を，真上向き(90度)がShaft135度になるようオフセットした角度にする
+    // (shaft_deg_from_arm_deg()参照)。
+    double shaft_theta = shaft_deg_from_arm_deg(direct) * M_PI / 180.0;
     // shaft_rotate=1のとき，アーム軸の回転によらずハンドの向きを180度回転させる。
     // 270度サーボのうち普段使うのは可動範囲分の180度だけなので，回転方向側の残り90度分の
     // 余裕を超える(=可動範囲の反対側まで回転しきれない)場合は，下のclamp_servo_pulse()で
@@ -220,11 +288,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
     lower_arm_right = HAND_STATE_RELEASE;
     lower_arm_expand = false;
 
-    __HAL_TIM_SET_COMPARE(&Left_htim,Left_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Middle_htim,Middle_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Right_htim,Right_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Expand_htim,Expand_TIM_CHANNEL,SERVO_0);
-    __HAL_TIM_SET_COMPARE(&Shaft_htim,Shaft_TIM_CHANNEL,SERVO_0);
+    hand_fold();
     break;
 
 
@@ -306,7 +370,7 @@ Status_LEDは，Left/Middle/Right/Expandそれぞれの現在の状態(true=ON)�
 
 実装は`status_led_state_t`によるステートマシン(`STATUS_LED_STATE_MARKER` → `..._CHANNEL_GAP` → `..._BLINK_ON`/`..._BLINK_GAP`(chごとに1〜2回) → `..._END_PAUSE` → 最初に戻る)．ONかOFFかで点滅回数が変わるため，固定長のフェーズ表ではなくこの状態機械で管理している．
 
-`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットする(実際にサーボもSERVO_0へ戻す)．Shaftサーボは，たたんだ状態にはせずホーミング原点(`LOWER_ARM_HOME_COORDINATE`)に対応する向きに戻す(ホーミング開始時点からホーミング完了時と同じ向きにしておくことで，完了時にハンドの向きが変わらないようにするため)．Shaftの状態はStatus_LEDの点滅表示には含まれない．
+`CAN_ID_LOWER_HOMING`受信時は4chとも状態をOFFにリセットし，`hand_fold()`で実際にサーボもたたんだ位置へ戻す．Shaftサーボは，たたんだ状態にはせずホーミング原点(`LOWER_ARM_HOME_COORDINATE`)に対応する向き(`shaft_home_pulse()`)に戻す(ホーミング開始時点からホーミング完了時と同じ向きにしておくことで，完了時にハンドの向きが変わらないようにするため)．Shaftの状態はStatus_LEDの点滅表示には含まれない．
 
 ```C
 /* USER CODE BEGIN 2 */
