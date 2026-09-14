@@ -2,10 +2,14 @@
 
 Main Controller．2台のプロコン(Nintendo Switch用ジョイコン等)をBluetoothで受け取り，CAN通信で各STM32(末端マイコン)に指令を送る．
 
+ビルド・書き込み手順とDev Containerについては[リポジトリ直下のREADME.md](../../README.md)を参照．
+
 ## Directory structure
 
 ```text
 ESP32/controller/
+├── .devcontainer/          ESP-IDF拡張だけを有効にしたDev Container
+│
 ├── components/
 │   ├── can/
 │   │   └── CAN(TWAI)通信のラッパー
@@ -31,7 +35,7 @@ esp_err_t can_tx(can_command_data_t *com);
 void can_register_rx_callback(can_id_t id, can_rx_callback_t callback);
 ```
 
-- `can_init_and_start()` で500kbpsのCAN通信を開始する．
+- `can_init_and_start()` で1MbpsのCAN通信を開始する(STM32側の設定と揃える)．
 - `can_tx()` で `can_command_data_t` をtxキューに追加して送信する．
 - `can_register_rx_callback()` で，特定のCAN ID(`can_id_t`)を受信した際に呼ばれるコールバックを登録できる．コールバックはCAN rx taskから直接呼ばれるため，重い処理を書かないこと．
 - `can_error_handling_task()` が，CANのバスオフを検知すると自動的にリカバーする．
@@ -40,7 +44,7 @@ CAN ID・データフォーマットの仕様そのものは [common/can_protoco
 
 ## components/procon
 
-Bluetooth経由でプロコン(ジョイコン等)を接続し，スティック・ボタンの入力を取得する．
+Bluetooth経由でプロコン(ジョイコン等)を接続し，スティック・ボタンの入力を取得する．Bluepad32/BTstackに依存しており，スタックサイズの注意点など実装上のメモは [components/procon/README.md](components/procon/README.md) を参照．
 
 ## main
 
@@ -54,7 +58,7 @@ void micon_connection_update();      // 周期的に呼び，Heartbeatタイム�
 bool get_connection(micon_type_t m);  // 対象のマイコンと通信できているか
 ```
 
-`MICON_TYPE_ROBOMAS_CONTROLLER` / `MICON_TYPE_UPPER_ARM` / `MICON_TYPE_LOWER_ARM` の3種類とも実装済み．`micon_connection_update()`は`HEARTBEAT_TIMEOUT_MS`(1000ms)を`pdMS_TO_TICKS()`でtick単位に変換してから経過tick数と比較する(逆にすると桁を間違えるので注意)．
+`MICON_TYPE_ROBOMAS_CONTROLLER` / `MICON_TYPE_UPPER_ARM` / `MICON_TYPE_LOWER_ARM` の3種類とも実装済み．`assemble_servo`には対応するHeartbeat CAN IDが無いため監視対象外(詳細は[common/can_protocol/README.md](../../common/can_protocol/README.md)参照)．`micon_connection_update()`は`HEARTBEAT_TIMEOUT_MS`(1000ms)を`pdMS_TO_TICKS()`でtick単位に変換してから経過tick数と比較する(逆にすると桁を間違えるので注意)．
 
 ### robot/arm_command
 
@@ -80,6 +84,10 @@ esp_err_t arms_init();
 esp_err_t lower_arm_homing();
 esp_err_t upper_arm_homing();
 void arms_update();
+
+void lower_arm_dump();
+void upper_arm_dump();
+void arms_dump();
 ```
 
 - `upper_arm_move()` : 座標の差分入力(dx, dy)を現在座標に加算する．可動域(`common/arm`で定義)の外に出る移動は無視する．Zは(dz)を`UPPER_ARM_Z_MIN`~`UPPER_ARM_Z_MIN + UPPER_ARM_Z_RANGE`にクランプしながら加算する．ハンドの向きは，`d_shaft_fine`(L/Rの押しっぱなしで±`UPPER_ARM_SHAFT_FINE_MAX_DEG`の範囲に収まるよう加減算する微調整量，度)と，`shaft_rotate_toggle`(ZL/ZRボタンのPRESSEDエッジ)で90度回転させる`shaft_rotate`の2段構えで制御する(下記`lower_arm_move()`のシャフト制御と同様，回転量が180度から90度になっている点のみ異なる)．ホーミング中は無視する．
@@ -90,6 +98,8 @@ void arms_update();
 - CAN受信コールバック(`*_homing_ack_notify`, `*_homing_done_notify`, `error_code_notify`) で，STM32側からのACK・完了通知・エラー通知を処理する．`error_code_notify`はタイムアウト系・拒否系のエラーを受け取った時点で，ESP32側の10秒待ちを待たずに即座に`homing_in_progress`を解除する．
 
 ホーミングのシーケンス(ACK・DONE・再送を含む)の詳細は [STM32/robomas_controller/README.md](../../STM32/robomas_controller/README.md) を参照．
+
+出場チーム(`common/arm/inc/arm.h`の`ROBOT_TEAM`)を書き換えた場合は，このファームウェアも必ずビルド・書き込みし直すこと(詳細は[リポジトリ直下のREADME.md](../../README.md)を参照)．
 
 ### led / gpio
 

@@ -77,7 +77,7 @@ typedef struct{
 }pid_t;
 
 /**
-* @param ROBOMAS_INITAL, // 何もトルクを送らない状態
+* @param ROBOMAS_INITIAL, // 初回起動時状態．何もトルクを送らない
 * @param ROBOMAS_HOMING, // 速度制御によって，リミットスイッチ位置まで回転する
 * @param ROBOMAS_IDLE,   // ホーミング終了による他のホーミングを待機
 * @param ROBOMAS_READY,  // ユーザが制御可能な状態
@@ -184,10 +184,10 @@ uint32_t status_led_phase_start;
 // 赤/青チームはフィールドが鏡合わせのため整理機構を左右逆側に付け替える必要があり，
 // それに合わせてDEG軸(偏角)をどちら側の可動端(リミットスイッチ)を原点として
 // ホーミングするかを切り替える(LOWER/UPPER_ARM_DEG_HOME_DEGはcommon/arm/inc/arm.h参照)。
-// 赤チーム: 可動域下限(_DEG_UNDER_LIMIT，整理機構は左)へ向けてホーミングする(従来通り)。
-// 青チーム: 可動域上限(_DEG_OVER_LIMIT，整理機構は右)へ向けてホーミングする。
+// 赤チーム: 可動域下限(*_DEG_UNDER_LIMIT，整理機構は左)へ向けてホーミングする(従来通り)。
+// 青チーム: 可動域上限(*_DEG_OVER_LIMIT，整理機構は右)へ向けてホーミングする。
 // ホーミング回転方向は，原点にする側へ実際に向かうよう符号(*_DEG_HOMING_DIRECTION_SIGN)を
-// 反転させる。DEG_ROBOMAS_DIRECTION(配線で決まる固定値)自体は変えない。
+// 反転させる。*_DEG_ROBOMAS_DIRECTION(配線で決まる固定値)自体は変えない。
 #if ROBOT_TEAM == ROBOT_TEAM_BLUE
 #define LOWER_ARM_DEG_HOMING_LIMIT_ON LOWER_ARM_DEG_OVER_LIMIT_ON
 #define UPPER_ARM_DEG_HOMING_LIMIT_ON UPPER_ARM_DEG_OVER_LIMIT_ON

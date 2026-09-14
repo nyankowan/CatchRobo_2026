@@ -2,6 +2,8 @@
 
 整理機構(Assemble)のサーボ角度を`CAN_ID_ASSEMBLE_COMMAND`(`common/can_protocol/README.md`参照)経由で制御する．
 
+同じ回路基板(NUCLEO-F303K8，`Kicad/STM32F303K8_lower_arm_servo`)を使う[STM32/lower_arm_servo](../lower_arm_servo/README.md)と，ピン・タイマー設定・CAN送受信の基本パターンは共通．座標変換もホーミングも使わないため，`common/coordinate`・`common/arm`はリンクしていない．
+
 ## settings
 ### Pin
 
@@ -18,7 +20,7 @@ TIM3(PWM，20ms周期)．他プロジェクト(lower_arm_servo等)と同じ`Pres
 
 ### CAN
 
-Prescaler=1, BS1=6TQ, BS2=1TQ, SJW=1TQ (他プロジェクトと共通)．
+Prescaler=1, BS1=6TQ, BS2=1TQ, SJW=1TQ (他のF303K8プロジェクトと共通，1Mbps)．
 
 ## Code
 
@@ -39,7 +41,9 @@ Prescaler=1, BS1=6TQ, BS2=1TQ, SJW=1TQ (他プロジェクトと共通)．
 
 ### CAN
 
-`CAN_ID_ASSEMBLE_COMMAND`(1byte，角度指令0〜90°)を受信すると，機構の可動域(`ASSEMBLE_DEG_RANGE`=90，`common/can_protocol`で定義)にクランプした上でサーボPWMに変換して出力する．
+`CAN_ID_ASSEMBLE_COMMAND`(DLC=1，角度指令0〜90°)を受信すると，機構の可動域(`ASSEMBLE_DEG_RANGE`=90，`common/can_protocol/inc/can_protocol.h`で定義)にクランプした上でサーボPWMに変換して出力する．
+
+ホーミングには関与しないため，`CAN_ID_ASSEMBLE_COMMAND`以外のCAN IDは無視する．
 
 ```C
 /* USER CODE BEGIN 0 */

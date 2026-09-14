@@ -1,4 +1,9 @@
-# components/procon
+# ESP32/controller/components/procon
+
+Bluetooth経由でプロコン(Nintendo Switch用コントローラー等)を接続し，スティック・ボタンの入力を取得するコンポーネント．Bluepad32/BTstackに依存する(Dev Containerでの依存取得については[リポジトリ直下のREADME.md](../../../../README.md)を参照)．
+
+## スタックサイズについて
+
 `my_platform.c`のコールバック群は，`app_main()`タスクで呼ばれるループ処理`btstack_run_loop_execute()`で呼ばれる．そのため，sdkconfigで決めることができる`CONFIG_ESP_MAIN_TASK_STACK_SIZE`は，
 Bluetooth接続時などは，スタックが深くなり，デフォルトの3584だと足りなくなることがある．
 そのため,`on_device_connected()`などが呼ばれるときのスタックの深さを，

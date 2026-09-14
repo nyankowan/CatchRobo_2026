@@ -1,6 +1,6 @@
 # STM32/common
 
-STM32側のプロジェクト(`lower_arm_servo`, `upper_arm_servo`, `robomas_controller`)全てから共通で使われるコード．
+STM32側のプロジェクト(`robomas_controller`, `lower_arm_servo`, `upper_arm_servo`, `assemble_servo`)全てから共通で使われるコード．
 
 ESP32とも共有する [common/](../../common/) (CAN ID定義・座標変換)とは別に，STM32のHALを使うコードはこちらに置く．
 
@@ -28,3 +28,5 @@ HAL_StatusTypeDef stm_can_send(
 DLCが不正(未知のCAN IDなど)な場合は送信せず `HAL_ERROR` を返す．
 
 受信については各プロジェクトの `HAL_CAN_RxFifo0MsgPendingCallback()` 内でそれぞれ実装しており，共通化していない．
+
+各プロジェクトの `CMakeLists.txt` からのリンク方法は [STM32/README.md](../README.md) を参照．

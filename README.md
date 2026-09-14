@@ -5,35 +5,35 @@ Team: OBT
 ## Directory structure
 ```text
 CatchRobo_2026/
-├── common/
+├── common/                     ESP32/STM32が共有するプラットフォーム非依存コード
 │   ├── arm/
-│   │   └── アームの可動域・ホーミング関連定数(ESP32/STM32共通)
+│   │   └── アームの物理パラメータ・ホーミング関連定数・出場チーム(ROBOT_TEAM)
 │   │
 │   ├── can_protocol/
-│   │   └── canのidとdataの対応
+│   │   └── CAN IDとデータフォーマットの対応定義
 │   │
 │   └── coordinate/
-│       └── 直交，極座標変換
+│       └── 直交座標・極座標変換
 │
 ├── ESP32/
 │   └── controller/
-│       └── ESP32による中央制御
+│       └── Main Controller(プロコン入力の受信とCANによる各STM32への指令)
 │
 ├── STM32/
 │   ├── common/
-│   │   └── can
-│   │       └── ESP-STM間のcanの処理
-│   │
-│   ├── lower_arm_servo/
-│   │   └── 下側アームのサーボ制御
-│   │
-│   ├── upper_arm_servo/
-│   │   └── 上側アームのサーボ制御(未実装)
+│   │   └── can/
+│   │       └── STM32 HAL CANを使ったCAN送信のラッパー
 │   │
 │   ├── robomas_controller/
-│   │   └── 両アームのロボマス制御
+│   │   └── 両アームのr軸・deg軸(Robomaster)制御．ホーミング処理の中枢
 │   │
-|   └── assemble_servo/
+│   ├── lower_arm_servo/
+│   │   └── 下アームのハンド(Left/Middle/Right/Expand)とShaftサーボ制御
+│   │
+│   ├── upper_arm_servo/
+│   │   └── 上アームのShaft/Zサーボ制御
+│   │
+│   └── assemble_servo/
 │       └── 整理機構のサーボ制御
 │
 └── Kicad/
@@ -45,11 +45,20 @@ CatchRobo_2026/
     │   └── ロボマス制御基板
     ├── servo/
     │   └── サーボ用補助基板
-    ├── library/
-    │   └── 共通シンボル・フットプリント
-    └── README.md
-        └── 部品リスト
+    └── library/
+        └── 共通シンボル・フットプリント
 ```
+
+各ディレクトリの詳細は，それぞれのREADMEを参照．
+
+| ディレクトリ | README |
+| :--- | :--- |
+| 共有コード | [common/README.md](common/README.md) |
+| CAN通信仕様 | [common/can_protocol/README.md](common/can_protocol/README.md) |
+| Main Controller | [ESP32/controller/README.md](ESP32/controller/README.md) |
+| STM32全体 | [STM32/README.md](STM32/README.md) |
+| 部品リスト | [Kicad/README.md](Kicad/README.md) |
+
 ## Hardware
 
 ### Actuator
@@ -57,8 +66,13 @@ CatchRobo_2026/
 - Robomaster M2006
 - DS3225 Servo
 
+### Sensor
+- リミットスイッチ(ホーミング用，robomas_controllerに接続)
+
 ### Communication
-- CAN (ESP32 - STM32, STM32 - Robomaster)
+- CAN 1Mbps (ESP32 - STM32, STM32 - Robomaster)
+
+CAN ID・データフォーマットの仕様は [common/can_protocol/README.md](common/can_protocol/README.md) を参照．
 
 ## System overview
 
@@ -69,15 +83,16 @@ graph LR
 
     ESP32 --- CAN[CAN BUS]
 
-    CAN --- STM1[STM32 #1<br>Robomaster制御]
-    CAN --- STM2[STM32 #2<br>Servo制御]
-    CAN --- STM3[STM32 #3<br>Servo制御]
-    CAN --- STM4[STM32 #4<br>Servo制御]
+    CAN --- STM1[STM32 #1<br>robomas_controller]
+    CAN --- STM2[STM32 #2<br>lower_arm_servo]
+    CAN --- STM3[STM32 #3<br>upper_arm_servo]
+    CAN --- STM4[STM32 #4<br>assemble_servo]
 
     STM1 <-->|CAN| Motor[Robomaster Motor<br>M3508/M2006]
-    STM2 -->|PWM| Servo1[DS3225]
-    STM3 -->|PWM| Servo2[DS3225]
-    STM4 -->|PWM| Servo3[DS3225]
+    Limit[リミットスイッチ] -->|GPIO| STM1
+    STM2 -->|PWM| Servo1[DS3225<br>Left/Middle/Right/Expand/Shaft]
+    STM3 -->|PWM| Servo2[DS3225<br>Shaft/Z]
+    STM4 -->|PWM| Servo3[DS3225<br>Assemble]
 ```
 
 
@@ -139,10 +154,32 @@ idf.py flash
 [Qiita: STM32の開発をVSCodeで行う](https://qiita.com/tanutanup/items/d680c92f5168fc3f0182) [@tanutanup(tanutanu p)様](https://qiita.com/tanutanup)
 
 #### Build
+各プロジェクト(`STM32/lower_arm_servo`, `STM32/upper_arm_servo`, `STM32/robomas_controller`, `STM32/assemble_servo`)のディレクトリで実行する．
 ```bash
 cmake --preset Release
 cmake --build --preset Release
 ```
+
+## 出場チーム(ROBOT_TEAM)の設定
+
+赤/青チームはフィールドが鏡合わせで，整理機構を左右逆側に取り付けるため，DEG軸のホーミング原点やShaftサーボの回転方向をチームごとに切り替える必要がある．
+
+出場チームは `common/arm/inc/arm.h` の `ROBOT_TEAM`(`ROBOT_TEAM_RED` / `ROBOT_TEAM_BLUE`)としてビルド時の定数で持たせている．緊急停止スイッチでESP32/STM32が再起動しても値を保持する必要があるため，実行時に切り替える方式にはしていない．
+
+**出場チームに応じて`arm.h`のこの値を書き換えた後は，`arm.h`を使う全ファームウェア(ESP32 Main Controller，STM32の`robomas_controller` / `lower_arm_servo` / `upper_arm_servo`)を必ずビルド・書き込みし直すこと．** 値がずれると，DEG軸のホーミングで検出するリミットスイッチと回転方向が基板間で食い違い，可動域の反対側の固定端に衝突する恐れがある．
+
+詳細は [STM32/robomas_controller/README.md](STM32/robomas_controller/README.md) を参照．
+
+## CI
+
+`.github/workflows/` でpush/pull request時に全ファームウェアのビルドを確認している．
+
+| Workflow | 内容 |
+| :--- | :--- |
+| `esp32-build.yml` | `ESP32/controller` をESP-IDF v5.5.4でビルド |
+| `stm32-build.yml` | STM32の4プロジェクトを`cmake --preset Release`でビルド |
+
+ESP-IDFのバージョンとSTM32のツールチェーンは，上記「Development environment」およびDev Containerの設定と揃えること．
 
 ## Dev Container (Docker)
 

@@ -41,10 +41,12 @@ typedef enum{
 }can_id_t;
 
 // left/middle/right各ハンドが取り得る状態．2bitで表現する．
+// 各状態に対応する実際のサーボ角度(パルス幅)はハンドの取り付け向きによって変わるため，
+// プロトコルでは規定せず受信側(STM32/lower_arm_servoのhand_state_to_pulse())が決める．
 typedef enum{
-    HAND_STATE_RELEASE = 0, //サーボ0度  : ワークをリリースする状態
-    HAND_STATE_HOLD    = 1, //サーボ45度 : ワークを保持する状態
-    HAND_STATE_CATCH   = 2, //サーボ180度: ワークをキャッチする状態
+    HAND_STATE_RELEASE = 0, //ワークをリリースする状態
+    HAND_STATE_HOLD    = 1, //ワークを保持する状態
+    HAND_STATE_CATCH   = 2, //ワークをキャッチする状態
 }hand_state_t;
 
 typedef struct{
