@@ -109,8 +109,8 @@ static uint32_t clamp_servo_pulse(double pulse, bool *out_of_range){
 *        チームによらず共通になる(チーム差はarm.hのUPPER_ARM_HOME_COORDINATEが
 *        可動域のどちら側の座標になるかにのみ現れる)。
 *
-*        赤チームのホーミング原点(UPPER_ARM_DEG_MIN=180度)ではSERVO_45，
-*        青チームのホーミング原点(UPPER_ARM_DEG_MIN+RANGE=360度)ではSERVO_225になる。
+*        赤チームのホーミング原点(UPPER_ARM_DEG_MIN=180度)ではサーボ45度，
+*        青チームのホーミング原点(UPPER_ARM_DEG_MIN+RANGE=360度)ではサーボ225度になる。
 *
 *        360度=coordinate.hのto_polar()の値域[0,2π)では0度としてラップされるため，
 *        偏角が0度付近で不連続にならないよう，UPPER_ARM_DEG_MIN未満の値には360度を
@@ -127,7 +127,7 @@ static double shaft_deg_from_arm_deg(direct_t direct){
 * @brief ホーミング原点(UPPER_ARM_HOME_COORDINATE，common/arm/inc/arm.h参照)に対応する
 *        Shaftのパルス幅を計算する。
 *        UPPER_ARM_HOME_COORDINATEをshaft_deg_from_arm_deg()に通すと，赤チームでは
-*        SERVO_45相当，青チームではSERVO_225相当の角度になる(=CAN_ID_UPPER_ARM_COMMAND
+*        サーボ45度，青チームではサーボ225度になる(=CAN_ID_UPPER_ARM_COMMAND
 *        側の計算式で得られる値と同じ)。下アーム(shaft_home_pulse())と同様，ホーミング
 *        開始時点からホーミング原点と同じ向きにしておくことで，ホーミング完了時に
 *        ハンドの向きが変わらないようにする。
@@ -192,7 +192,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 
 /**
 * @brief Status_LEDを周期的(mainループ毎)に呼び出して非ブロッキングに点滅させる．
-*        通常時はSTATUS_LED_BLINK_MS周期のハートビート，range_errorがtrueの間は
+*        正常時は点灯させたままにし，range_errorがtrueの間は
 *        STATUS_LED_ERROR_BLINK_MS周期の高速点滅に切り替えてエラーを知らせる．
 */
 void status_led_update(){

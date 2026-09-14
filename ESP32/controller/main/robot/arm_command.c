@@ -535,7 +535,7 @@ static void error_code_notify(const can_data_t *data){
  * 例:
  * control taskなどから10～100ms周期程度で呼ぶ。
  *
- * HOMING_TIMEOUT_MS以内にDONEが来なければ
+ * HOMING_LOWER_ARM_TIMEOUT_MS / HOMING_UPPER_ARM_TIMEOUT_MS以内にDONEが来なければ
  * homing失敗としてin_progressを解除する。
  */
 void arms_update(){
